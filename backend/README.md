@@ -65,5 +65,5 @@ Autonomous DB awake by querying it on every tick.
 ## Deploy (Oracle Always Free VM, 1 GB)
 
 Node is light enough for the 1 GB VM. Run it as a systemd service
-or under `pm2`, with `PORT=3000` and the env vars above. The app's
-default backend URL is `http://129.225.82.58:3000`.
+or under `pm2`, with `PORT=25565` and the env vars above. The app's
+default backend URL is `http://129.225.82.58:25565`.
