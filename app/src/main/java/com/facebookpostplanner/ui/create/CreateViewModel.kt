@@ -59,15 +59,23 @@ class CreateViewModel(app: Application) : AndroidViewModel(app) {
         publishNow: Boolean,
         saveAsDraft: Boolean = false
     ) = viewModelScope.launch {
-        if (caption.isBlank() && mediaUris.isEmpty()) {
+        // Effective media: newly picked files if any, otherwise the photos
+        // already on the post being edited. Counting only new picks wrongly
+        // blocked editing a story that already has its one photo ("Add text
+        // or media first" / "A story needs exactly one photo"), and let a
+        // multi-photo post slip past the story check when no new photo was
+        // picked.
+        val effectiveMediaCount = if (mediaUris.isNotEmpty()) mediaUris.size
+            else editingPost?.mediaList?.size ?: 0
+        if (caption.isBlank() && effectiveMediaCount == 0) {
             _error.value = "Add text or media first."
             return@launch
         }
-        if (_type.value == PostType.REEL && mediaUris.size != 1) {
+        if (_type.value == PostType.REEL && effectiveMediaCount != 1) {
             _error.value = "A reel needs exactly one video (MP4)."
             return@launch
         }
-        if (_type.value == PostType.STORY && mediaUris.size != 1) {
+        if (_type.value == PostType.STORY && effectiveMediaCount != 1) {
             _error.value = "A story needs exactly one photo in v1."
             return@launch
         }

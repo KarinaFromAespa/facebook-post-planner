@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -34,12 +35,17 @@ import coil.compose.AsyncImage
  * optional remove button sits on each tile. The remove button is a plain
  * clickable circle, not an IconButton — IconButton enforces a 48dp minimum
  * touch target that overflowed the tile and made the X look oversized.
+ *
+ * `dimAfter` dims every tile from that index on: a story uses one photo
+ * only, so when the type is Story the extras are greyed out to show they
+ * won't be used, while their remove buttons stay so the user can drop them.
  */
 @Composable
 fun MediaRow(
     uris: List<String>,
     isVideo: Boolean = false,
     onRemove: ((String) -> Unit)? = null,
+    dimAfter: Int = Int.MAX_VALUE,
     modifier: Modifier = Modifier
 ) {
     if (uris.isEmpty()) return
@@ -48,10 +54,11 @@ fun MediaRow(
         modifier = modifier.fillMaxWidth().height(120.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(uris) { uri ->
+        itemsIndexed(uris) { index, uri ->
             Box(
                 Modifier.size(120.dp).clip(shape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .alpha(if (index >= dimAfter) 0.35f else 1f)
             ) {
                 AsyncImage(
                     model = uri, contentDescription = null,

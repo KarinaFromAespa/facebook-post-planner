@@ -262,11 +262,14 @@ fun CreateScreen(
             MediaRow(
                 uris = media.map { it.toString() },
                 isVideo = type == PostType.REEL,
-                onRemove = { uri -> media.remove(Uri.parse(uri)) }
+                onRemove = { uri -> media.remove(Uri.parse(uri)) },
+                dimAfter = if (type == PostType.STORY) 1 else Int.MAX_VALUE
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "${media.size} new selected — these replace the current photos on save.",
+                if (type == PostType.STORY && media.size > 1)
+                    "A story uses one photo only — the first photo is kept. Remove the extra photos to continue."
+                else "${media.size} new selected — these replace the current photos on save.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -274,11 +277,14 @@ fun CreateScreen(
             Spacer(Modifier.height(12.dp))
             MediaRow(
                 uris = editPost.mediaList,
-                isVideo = type == PostType.REEL
+                isVideo = type == PostType.REEL,
+                dimAfter = if (type == PostType.STORY) 1 else Int.MAX_VALUE
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "${editPost.mediaList.size} photo${if (editPost.mediaList.size > 1) "s" else ""} on this post — pick new ones to replace them.",
+                if (type == PostType.STORY && editPost.mediaList.size > 1)
+                    "This post has ${editPost.mediaList.size} photos — a story uses one photo only. Pick a new photo to replace them."
+                else "${editPost.mediaList.size} photo${if (editPost.mediaList.size > 1) "s" else ""} on this post — pick new ones to replace them.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
