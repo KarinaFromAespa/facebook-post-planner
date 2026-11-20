@@ -24,6 +24,9 @@ android {
         val fbAppId = (project.findProperty("planner.facebook.app.id") ?: "0").toString()
         manifestPlaceholders["facebookAppId"] = fbAppId
         manifestPlaceholders["facebookLoginScheme"] = "fb$fbAppId"
+        // The SDK rejects a bare numeric App ID written directly in the
+        // manifest, so it goes in as a generated string resource instead.
+        resValue("string", "facebook_app_id", fbAppId)
     }
 
     // Debug builds are always signed with the committed debug.keystore at the
