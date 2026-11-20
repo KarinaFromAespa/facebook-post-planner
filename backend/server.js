@@ -41,6 +41,15 @@ app.get('/api/queue', (req, res) => res.json(
     .sort((a, b) => Date.parse(a.scheduledAt || 0) - Date.parse(b.scheduledAt || 0)).map(toDto),
 ));
 
+// Every post, all statuses. The app syncs this (not just /api/queue) so
+// it learns when a scheduled post publishes or fails: /api/queue only
+// returns scheduled posts, so a published one drops out of it and the
+// app kept showing it as scheduled forever.
+app.get('/api/posts', (req, res) => res.json(
+  store.allPosts()
+    .sort((a, b) => Date.parse(a.scheduledAt || 0) - Date.parse(b.scheduledAt || 0)).map(toDto),
+));
+
 app.get('/api/drafts', (req, res) => res.json(
   store.allPosts().filter((p) => p.status === 'draft').map(toDto),
 ));
