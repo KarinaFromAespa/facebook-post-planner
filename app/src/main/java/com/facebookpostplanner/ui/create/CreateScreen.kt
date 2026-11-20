@@ -128,7 +128,11 @@ fun CreateScreen(
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()
-    ) { uris -> media.addAll(uris) }
+    ) { uris ->
+        // Skip photos already picked — the system picker lets the user
+        // choose the same photo again, and adding it twice would post it twice.
+        media.addAll(uris.filter { it !in media }.distinct())
+    }
 
     if (done) {
         onDone()
