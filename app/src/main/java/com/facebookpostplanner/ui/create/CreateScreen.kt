@@ -134,6 +134,19 @@ fun CreateScreen(
         media.addAll(uris.filter { it !in media }.distinct())
     }
 
+    // Stories and reels take exactly one file, so they get a single-pick
+    // launcher instead of the multi-pick one — the picker itself only lets
+    // the user choose one. Picking a different file replaces the current
+    // one; picking the same one again is a no-op.
+    val singlePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null && uri !in media) {
+            media.clear()
+            media.add(uri)
+        }
+    }
+
     if (done) {
         onDone()
         vm.resetDone()
@@ -232,11 +245,17 @@ fun CreateScreen(
         Text("Media", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = {
-            picker.launch(if (type == PostType.REEL) "video/*" else "image/*")
+            val mime = if (type == PostType.REEL) "video/*" else "image/*"
+            if (type == PostType.STORY || type == PostType.REEL) singlePicker.launch(mime)
+            else picker.launch(mime)
         }) {
             Icon(Icons.Default.Image, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text(if (type == PostType.REEL) "Pick video (MP4)" else "Pick photos")
+            Text(
+                if (type == PostType.REEL) "Pick video (MP4)"
+                else if (type == PostType.STORY) "Pick photo"
+                else "Pick photos"
+            )
         }
         if (media.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
