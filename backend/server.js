@@ -140,10 +140,13 @@ app.patch('/api/posts/:id', (req, res) => {
   if (scheduledAt !== undefined) post.scheduledAt = scheduledAt || null;
   if (pageId !== undefined) post.pageId = pageId || null;
   if (status !== undefined) post.status = status;
-  // Keep status and scheduledAt consistent: a scheduled post needs a time,
-  // a draft has none.
+  // A scheduled post needs a time; a draft may KEEP a planned time (the
+  // user picked it when creating the draft) — it just doesn't publish
+  // until the status becomes scheduled. A past time can't be scheduled.
   if (post.status === 'scheduled' && !post.scheduledAt) post.status = 'draft';
-  if (post.status === 'draft') post.scheduledAt = null;
+  if (post.status === 'scheduled' && Date.parse(post.scheduledAt) < Date.now() + 2 * 60 * 1000) {
+    return res.status(400).json({ error: 'Pick a time at least 2 minutes ahead.' });
+  }
   post.failureReason = null;
   post.updatedAt = new Date().toISOString();
   store.upsertPost(post);
