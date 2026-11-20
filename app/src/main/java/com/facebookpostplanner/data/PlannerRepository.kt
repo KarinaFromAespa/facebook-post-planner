@@ -273,16 +273,23 @@ class PlannerRepository(context: Context) {
 private fun com.facebookpostplanner.data.remote.PostDto.toLocal(): Post {
     val type = runCatching { PostType.valueOf(type.uppercase()) }.getOrDefault(PostType.POST)
     val status = runCatching { PostStatus.valueOf(status.uppercase()) }.getOrDefault(PostStatus.SCHEDULED)
-    val millis = scheduledAt?.let {
-        runCatching {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }.parse(it)?.time
-        }.getOrNull()
-    }
+    val millis = scheduledAt?.let { parseIso(it) }
     return Post(
         id = id, type = type, caption = caption, hashtags = hashtags ?: "",
         scheduledAtMillis = millis, status = status,
         failureReason = failureReason, backendId = id, publishedPostId = facebookPostId
     )
+}
+
+/** Parse a backend ISO-8601 timestamp. The backend returns UTC `Z` times,
+ * but the web writes them with milliseconds (`...T15:40:00.000Z`) while the
+ * app writes them without (`...T16:13:00Z`) — both shapes must parse, or
+ * the post's time comes back null and it vanishes from the Publish tab. */
+private fun parseIso(iso: String): Long? {
+    runCatching { return java.time.Instant.parse(iso).toEpochMilli() }
+    return runCatching {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.parse(iso)?.time
+    }.getOrNull()
 }
