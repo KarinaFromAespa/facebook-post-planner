@@ -19,23 +19,36 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.data.local.PostStatus
 import com.facebookpostplanner.ui.components.PostCard
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -59,6 +72,14 @@ fun PublishScreen(
     val paused by vm.paused.collectAsState()
     val error by vm.error.collectAsState()
     val slots = vm.todaySlots()
+
+    // "Update schedule" state: the post being moved, and the date/time
+    // picker flow (date first, then time — same as the composer).
+    var rescheduleTarget by remember { mutableStateOf<Post?>(null) }
+    var showRescheduleDate by remember { mutableStateOf(false) }
+    var showRescheduleTime by remember { mutableStateOf(false) }
+    var reschedulePickedDate by remember { mutableStateOf<Long?>(null) }
+    var rescheduleError by remember { mutableStateOf<String?>(null) }
 
     // Pull the latest queue every time this tab is shown, so posts scheduled
     // elsewhere (website, or after this screen was first opened) appear.
@@ -107,6 +128,14 @@ fun PublishScreen(
         error?.let {
             Text(
                 "Backend unreachable: $it — showing the local queue.",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        rescheduleError?.let {
+            Text(
+                it,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error
@@ -192,10 +221,82 @@ fun PublishScreen(
                             onPublishNow = { vm.publishNow(post) },
                             onDelete = { vm.delete(post) },
                             onRetry = if (post.status == PostStatus.FAILED) ({ vm.publishNow(post) }) else null,
-                            onEdit = if (post.status == PostStatus.SCHEDULED || post.status == PostStatus.FAILED) ({ onEdit(post) }) else null
+                            onEdit = if (post.status == PostStatus.SCHEDULED || post.status == PostStatus.FAILED) ({ onEdit(post) }) else null,
+                            // "Update schedule" moves just the time, without
+                            // opening the full Edit flow.
+                            onUpdateSchedule = if (post.status == PostStatus.SCHEDULED) ({
+                                rescheduleTarget = post
+                                rescheduleError = null
+                                showRescheduleDate = true
+                            }) else null
                         )
                         Spacer(Modifier.height(10.dp))
                     }
+                }
+            }
+        }
+
+        // "Update schedule" picker: date first, then time. The pickers open
+        // on the post's current scheduled time, so the user can nudge it.
+        // key(target.id) recreates the picker states when a different post
+        // is picked, so a second reschedule doesn't show the first post's time.
+        rescheduleTarget?.let { target ->
+            key(target.id) {
+                val targetCal = Calendar.getInstance().apply {
+                    timeInMillis = target.scheduledAtMillis ?: System.currentTimeMillis()
+                }
+                val dateState = rememberDatePickerState(
+                    initialSelectedDateMillis = target.scheduledAtMillis ?: System.currentTimeMillis()
+                )
+                val timeState = rememberTimePickerState(
+                    initialHour = targetCal.get(Calendar.HOUR_OF_DAY),
+                    initialMinute = targetCal.get(Calendar.MINUTE),
+                    is24Hour = android.text.format.DateFormat.is24HourFormat(LocalContext.current)
+                )
+                if (showRescheduleDate) {
+                    DatePickerDialog(
+                        onDismissRequest = { showRescheduleDate = false; rescheduleTarget = null },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                reschedulePickedDate = dateState.selectedDateMillis
+                                showRescheduleDate = false
+                                showRescheduleTime = true
+                            }) { Text("Next") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showRescheduleDate = false; rescheduleTarget = null }) { Text("Cancel") }
+                        }
+                    ) { DatePicker(state = dateState) }
+                }
+                if (showRescheduleTime) {
+                    AlertDialog(
+                        onDismissRequest = { showRescheduleTime = false; rescheduleTarget = null },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                val day = reschedulePickedDate ?: target.scheduledAtMillis ?: System.currentTimeMillis()
+                                val cal = Calendar.getInstance().apply {
+                                    timeInMillis = day
+                                    set(Calendar.HOUR_OF_DAY, timeState.hour)
+                                    set(Calendar.MINUTE, timeState.minute)
+                                    set(Calendar.SECOND, 0)
+                                    set(Calendar.MILLISECOND, 0)
+                                }
+                                val picked = cal.timeInMillis
+                                if (picked < System.currentTimeMillis() + 2 * 60 * 1000) {
+                                    rescheduleError = "Pick a time at least 2 minutes ahead."
+                                } else {
+                                    vm.updateSchedule(target, picked)
+                                    rescheduleError = null
+                                }
+                                showRescheduleTime = false
+                                rescheduleTarget = null
+                            }) { Text("Set time") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showRescheduleTime = false; rescheduleTarget = null }) { Text("Cancel") }
+                        },
+                        text = { TimePicker(state = timeState) }
+                    )
                 }
             }
         }

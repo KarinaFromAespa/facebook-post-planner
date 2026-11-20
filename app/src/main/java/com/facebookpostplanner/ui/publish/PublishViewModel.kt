@@ -58,6 +58,11 @@ class PublishViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { repo.publishNow(post) }.onFailure { _error.value = it.message }
     }
 
+    fun updateSchedule(post: Post, scheduledAtMillis: Long) = viewModelScope.launch {
+        runCatching { repo.updateSchedule(post, scheduledAtMillis) }
+            .onFailure { _error.value = it.message }
+    }
+
     fun delete(post: Post) = viewModelScope.launch { repo.deletePost(post.id) }
     fun clearError() { _error.value = null }
 }

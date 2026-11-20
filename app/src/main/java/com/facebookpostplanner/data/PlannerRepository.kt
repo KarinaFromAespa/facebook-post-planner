@@ -190,6 +190,34 @@ class PlannerRepository(context: Context) {
         return updated
     }
 
+    /** Change only the scheduled time of a scheduled post (the Publish
+     * tab's "Update schedule" action). Type, caption, hashtags and photos
+     * are left alone. The backend rejects a time less than 2 minutes ahead,
+     * so the caller must validate the time first. */
+    suspend fun updateSchedule(post: Post, scheduledAtMillis: Long): Post {
+        val updated = post.copy(
+            scheduledAtMillis = scheduledAtMillis,
+            status = PostStatus.SCHEDULED,
+            failureReason = null,
+            updatedAtMillis = System.currentTimeMillis()
+        )
+        dao.upsert(updated)
+        runCatching {
+            val backendId = post.backendId ?: post.id
+            api().updatePost(
+                backendId,
+                com.facebookpostplanner.data.remote.UpdatePostRequest(
+                    scheduledAt = iso(scheduledAtMillis),
+                    status = "scheduled"
+                )
+            )
+        }.onFailure { e ->
+            dao.upsert(updated.copy(status = PostStatus.FAILED, failureReason = e.message))
+            throw e
+        }
+        return updated
+    }
+
     private suspend fun uploadMedia(backendId: String, uri: Uri) {
         val file = File(appContext.cacheDir, "upload-${UUID.randomUUID()}")
         appContext.contentResolver.openInputStream(uri)?.use { input ->
