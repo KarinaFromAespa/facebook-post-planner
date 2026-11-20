@@ -98,6 +98,58 @@ app.post('/api/posts/:id/media', media.upload.single('file'), (req, res) => {
   res.json(toDto(post));
 });
 
+// Replace the media of a post (used when editing: clear the old photos so
+// the client can upload replacements). Deletes the files from disk.
+app.delete('/api/posts/:id/media', (req, res) => {
+  const post = store.getPost(req.params.id);
+  if (!post) return res.status(404).json({ error: 'not found' });
+  if (post.status === 'published' || post.status === 'publishing') {
+    return res.status(400).json({ error: 'a published post cannot be edited' });
+  }
+  media.deleteMedia(post);
+  post.mediaFiles = [];
+  post.updatedAt = new Date().toISOString();
+  store.upsertPost(post);
+  res.json(toDto(post));
+});
+
+// Edit a scheduled post or draft: caption, hashtags, time/date, type and
+// Page. A post that already went out (published/publishing) cannot be edited.
+app.patch('/api/posts/:id', (req, res) => {
+  const post = store.getPost(req.params.id);
+  if (!post) return res.status(404).json({ error: 'not found' });
+  if (post.status === 'published' || post.status === 'publishing') {
+    return res.status(400).json({ error: 'a published post cannot be edited' });
+  }
+  const { type, caption, hashtags, scheduledAt, status, pageId } = req.body || {};
+  if (type !== undefined && !TYPES.has(type)) {
+    return res.status(400).json({ error: 'type must be post, reel or story' });
+  }
+  if (caption !== undefined && (typeof caption !== 'string' || caption.length > 1024)) {
+    return res.status(400).json({ error: 'caption must be a string, max 1024 chars' });
+  }
+  if (scheduledAt !== undefined && scheduledAt !== null && Number.isNaN(Date.parse(scheduledAt))) {
+    return res.status(400).json({ error: 'scheduledAt must be ISO-8601' });
+  }
+  if (status !== undefined && !['draft', 'scheduled'].includes(status)) {
+    return res.status(400).json({ error: 'status must be draft or scheduled' });
+  }
+  if (type !== undefined) post.type = type;
+  if (caption !== undefined) post.caption = caption.trim();
+  if (hashtags !== undefined) post.hashtags = hashtags || null;
+  if (scheduledAt !== undefined) post.scheduledAt = scheduledAt || null;
+  if (pageId !== undefined) post.pageId = pageId || null;
+  if (status !== undefined) post.status = status;
+  // Keep status and scheduledAt consistent: a scheduled post needs a time,
+  // a draft has none.
+  if (post.status === 'scheduled' && !post.scheduledAt) post.status = 'draft';
+  if (post.status === 'draft') post.scheduledAt = null;
+  post.failureReason = null;
+  post.updatedAt = new Date().toISOString();
+  store.upsertPost(post);
+  res.json(toDto(post));
+});
+
 app.post('/api/posts/:id/publish-now', async (req, res) => {
   const post = store.getPost(req.params.id);
   if (!post) return res.status(404).json({ error: 'not found' });
