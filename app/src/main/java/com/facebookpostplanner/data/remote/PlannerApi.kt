@@ -84,6 +84,9 @@ interface PlannerApi {
     @POST("api/pages/connect")
     suspend fun connectPage(@Body req: ConnectPageRequest): PageDto
 
+    @DELETE("api/pages/{id}")
+    suspend fun deletePage(@Path("id") id: String)
+
     @GET("api/queue")
     suspend fun queue(): List<PostDto>
 

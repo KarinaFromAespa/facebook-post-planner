@@ -68,6 +68,16 @@ class PlannerRepository(context: Context) {
         return stored
     }
 
+    /** Remove a Page from the backend (and clear it locally). The backend
+     * also moves that Page's scheduled posts to draft so they leave the
+     * queue instead of sitting there as scheduled forever. Best-effort:
+     * the local page is cleared even if the backend is unreachable. */
+    suspend fun disconnectPage(id: String): Boolean {
+        val removed = runCatching { api().deletePage(id) }.isSuccess
+        setPage(null, null)
+        return removed
+    }
+
     suspend fun setBackendUrl(url: String) = settings.setBackendUrl(url)
     fun backendUrl(): Flow<String> = settings.backendUrl
 

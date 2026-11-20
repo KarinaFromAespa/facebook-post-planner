@@ -164,7 +164,19 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun disconnect() = viewModelScope.launch {
-        repo.setPage(null, null)
+        val id = selectedPageId.value
+        if (id != null) {
+            runCatching { repo.disconnectPage(id) }
+        } else {
+            repo.setPage(null, null)
+        }
+        // Clear the Facebook session so the next login actually prompts
+        // and can grant the new permissions (e.g. read_insights). Without
+        // this, LoginManager just returns the old token and the user can
+        // never pick up the new scopes — it feels like the page cannot be
+        // disconnected at all.
+        LoginManager.getInstance().logOut()
+        refresh()
     }
 
     fun saveBackendUrl(url: String) = viewModelScope.launch {
