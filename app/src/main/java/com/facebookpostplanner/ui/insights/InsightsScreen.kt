@@ -45,6 +45,7 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
     val monetized by vm.monetized.collectAsState()
     val criteria by vm.criteria.collectAsState()
     val totalEarnings by vm.totalEarnings.collectAsState()
+    val captions by vm.captions.collectAsState()
 
     val ranked = insights.sortedByDescending { it.earningsUsd ?: -1.0 }
     val bestByEngagement = insights.sortedByDescending { it.engagement }.firstOrNull()
@@ -132,7 +133,7 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
                         val post = published.firstOrNull { p -> p.id == it.postId }
                         Column {
                             Text(
-                                post?.caption?.take(80) ?: it.postId,
+                                captions[it.postId]?.take(80) ?: post?.caption?.take(80) ?: it.postId,
                                 maxLines = 2,
                                 style = MaterialTheme.typography.bodyLarge
                             )
@@ -161,7 +162,7 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(Modifier.padding(12.dp)) {
-                    Text(post?.caption?.take(80) ?: row.postId, maxLines = 2)
+                    Text(captions[row.postId]?.take(80) ?: post?.caption?.take(80) ?: row.postId, maxLines = 2)
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Stat("Likes", "${row.likes}")

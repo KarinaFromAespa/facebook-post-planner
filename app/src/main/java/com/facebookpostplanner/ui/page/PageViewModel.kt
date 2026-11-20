@@ -112,7 +112,7 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
         _fbLoggingIn.value = true
         LoginManager.getInstance().logInWithReadPermissions(
             activity,
-            listOf("public_profile", "pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management")
+            listOf("public_profile", "pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management", "read_insights", "pages_read_user_content")
         )
     }
 

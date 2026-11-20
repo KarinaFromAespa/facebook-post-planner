@@ -69,6 +69,7 @@ data class InsightsDto(
 )
 data class InsightDto(
     val postId: String,
+    val caption: String? = null,
     val likes: Int,
     val comments: Int,
     val shares: Int,
