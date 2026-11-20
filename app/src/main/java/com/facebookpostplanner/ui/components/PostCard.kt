@@ -33,6 +33,31 @@ import androidx.compose.ui.unit.dp
 import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.data.local.PostStatus
 import com.facebookpostplanner.data.local.PostType
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
+/** "Today", "Tomorrow", or e.g. "Fri, Nov 21" for a scheduled time. */
+fun dayLabel(millis: Long): String {
+    val now = Calendar.getInstance()
+    val cal = Calendar.getInstance().apply { timeInMillis = millis }
+    val sameDay = now.get(Calendar.YEAR) == cal.get(Calendar.YEAR) &&
+        now.get(Calendar.DAY_OF_YEAR) == cal.get(Calendar.DAY_OF_YEAR)
+    if (sameDay) return "Today"
+    val tomorrow = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
+    val isTomorrow = tomorrow.get(Calendar.YEAR) == cal.get(Calendar.YEAR) &&
+        tomorrow.get(Calendar.DAY_OF_YEAR) == cal.get(Calendar.DAY_OF_YEAR)
+    if (isTomorrow) return "Tomorrow"
+    return SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(Date(millis))
+}
+
+private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+/** "Today · 21:58" — the post's exact scheduled time, as shown on a card. */
+fun scheduledTimeLabel(millis: Long): String {
+    return "${dayLabel(millis)} · ${timeFmt.format(Date(millis))}"
+}
 
 // Status pills use semantic colors (green = published, red = failed) —
 // these are states, not the brand color, which stays Facebook blue.
@@ -49,8 +74,9 @@ private fun statusColors(status: PostStatus): Pair<Color, Color> {
 
 /**
  * Buffer-style queue card: type + status pills, a 3-dot menu for the
- * per-post actions, a caption snippet, and the media collage. The time
- * lives on the slot header in PublishScreen, not on the card.
+ * per-post actions, a caption snippet, the media collage, and the post's
+ * exact scheduled time. The time is on the card itself — the Publish tab
+ * groups by day, so no header carries a time for it.
  */
 @Composable
 fun PostCard(
@@ -153,6 +179,14 @@ fun PostCard(
                     "Failed: $it", maxLines = 2,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall
+                )
+            }
+            post.scheduledAtMillis?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    scheduledTimeLabel(it),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

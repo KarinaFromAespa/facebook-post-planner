@@ -48,20 +48,21 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.data.local.PostStatus
 import com.facebookpostplanner.ui.components.PostCard
+import com.facebookpostplanner.ui.components.dayLabel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-private val slotFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
+private val dayKeyFmt = SimpleDateFormat("yyyy-DDD", Locale.getDefault())
 private val dateFmt = SimpleDateFormat("EEEE, d MMMM", Locale.getDefault())
 
 /**
- * Publish tab = home. Buffer-style Today timeline: each hourly slot gets a
- * time pin (dot + time), then its cards. Only slots that actually have a
- * scheduled post are shown — empty hours are not listed. Multiple items
- * can share a slot — each keeps its own status/failure. Drafts are shown
- * in a separate section below the queue.
+ * Publish tab = home. Buffer-style timeline grouped by day: each day gets
+ * a header (Today, Tomorrow, or the date), then its cards, each showing
+ * its exact scheduled time. Only days that actually have a scheduled post
+ * are shown. Multiple items can share a day — each keeps its own
+ * status/failure. Drafts are shown in a separate section below the queue.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,7 +74,6 @@ fun PublishScreen(
     val queue by vm.queue.collectAsState(initial = emptyList())
     val paused by vm.paused.collectAsState()
     val error by vm.error.collectAsState()
-    val slots = vm.todaySlots()
 
     // "Update schedule" state: the post being moved, and the date/time
     // picker flow (date first, then time — same as the composer).
@@ -144,24 +144,27 @@ fun PublishScreen(
             )
         }
 
-        // A post belongs to a slot when it falls in that slot's hour on the
-        // same day — matching by exact HH:mm hid every post that wasn't
-        // scheduled exactly on the hour (e.g. 14:15 never matched 14:00).
-        val hourFmt = SimpleDateFormat("yyyy-DDD-HH", Locale.getDefault())
-        val slotsWithPosts = slots.map { slot ->
-            slot to queue.filter {
-                it.scheduledAtMillis?.let { t ->
-                    hourFmt.format(Date(t)) == hourFmt.format(Date(slot))
-                } == true
+        // Group by day, not by hour. The old hourly slots showed the
+        // slot's start time as the header (e.g. "21:00") while a post
+        // inside it was really at 21:58 — the header read as the scheduled
+        // time and was wrong. The exact time lives on each card now.
+        // Grouping by day also makes posts scheduled for tomorrow (or
+        // later) visible: the old slots only covered today's 24 hours, so
+        // a tomorrow post matched no slot and never appeared.
+        val dayGroups = queue
+            .filter { it.scheduledAtMillis != null }
+            .groupBy { dayKeyFmt.format(Date(it.scheduledAtMillis!!)) }
+            .map { (_, posts) ->
+                dayLabel(posts.first().scheduledAtMillis!!) to posts.sortedBy { it.scheduledAtMillis }
             }
-        }.filter { it.second.isNotEmpty() }
+            .sortedBy { it.second.first().scheduledAtMillis }
 
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (slotsWithPosts.isEmpty()) {
+            if (dayGroups.isEmpty()) {
                 item {
                     Column(
                         Modifier.fillMaxWidth().padding(top = 48.dp),
@@ -190,7 +193,7 @@ fun PublishScreen(
                     }
                 }
             }
-            items(slotsWithPosts) { (slot, atSlot) ->
+            items(dayGroups) { (day, atDay) ->
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -200,20 +203,20 @@ fun PublishScreen(
                         )
                         Spacer(Modifier.size(8.dp))
                         Text(
-                            slotFmt.format(Date(slot)),
+                            day,
                             style = MaterialTheme.typography.titleMedium
                         )
-                        if (atSlot.size > 1) {
+                        if (atDay.size > 1) {
                             Spacer(Modifier.size(8.dp))
                             Text(
-                                "${atSlot.size} posts",
+                                "${atDay.size} posts",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    atSlot.forEach { post ->
+                    atDay.forEach { post ->
                         PostCard(
                             post = post,
                             // "Publish now" is the intentional way to send a

@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.Calendar
 
 class PublishViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = PlannerRepository(app)
@@ -25,16 +24,6 @@ class PublishViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             runCatching { _paused.value = repo.queuePaused() }
             runCatching { repo.refreshQueue() }.onFailure { _error.value = it.message }
-        }
-    }
-
-    /** Hourly slots for the whole day, so a post at any hour shows up — not
-     * only 08:00–18:00. Only hours that actually have a post are displayed
-     * (PublishScreen filters the empty ones out). */
-    fun todaySlots(): List<Long> {
-        val cal = Calendar.getInstance()
-        return (0..23).map { hour ->
-            cal.apply { set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
         }
     }
 
