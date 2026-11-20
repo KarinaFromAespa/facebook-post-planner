@@ -70,13 +70,13 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
      * The picked Page's token is handed to the backend (POST /api/pages/connect)
      * so the server can publish as that Page.
      *
-     * Permissions: pages_read_engagement to list Pages,
+     * Permissions: pages_show_list and pages_read_engagement to list Pages,
      * pages_manage_posts so the backend may publish. In a dev-mode Facebook
      * app the owner can use these without App Review; other users need the
      * app reviewed and approved by Facebook first.
      *
-     * pages_show_list and manage_pages are removed Facebook permissions —
-     * requesting them makes Facebook reject the login with "Invalid Scopes".
+     * manage_pages is a removed Facebook permission — requesting it makes
+     * Facebook reject the login with "Invalid Scopes".
      */
     fun startFacebookLogin(activity: Activity, callbackManager: CallbackManager) {
         // Without a real App ID + client token the SDK is never initialized
@@ -112,7 +112,7 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
         _fbLoggingIn.value = true
         LoginManager.getInstance().logInWithReadPermissions(
             activity,
-            listOf("public_profile", "pages_read_engagement", "pages_manage_posts")
+            listOf("public_profile", "pages_show_list", "pages_read_engagement", "pages_manage_posts")
         )
     }
 
