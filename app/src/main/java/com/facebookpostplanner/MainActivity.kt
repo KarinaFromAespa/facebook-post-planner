@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -24,13 +25,18 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.facebook.CallbackManager
+import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.ui.create.CreateScreen
+import com.facebookpostplanner.ui.drafts.DraftsScreen
 import com.facebookpostplanner.ui.insights.InsightsScreen
 import com.facebookpostplanner.ui.page.PageScreen
 import com.facebookpostplanner.ui.publish.PublishScreen
@@ -64,6 +70,7 @@ class MainActivity : ComponentActivity() {
 private enum class Tab(val route: String, val label: String) {
     CREATE("create", "Create"),
     PUBLISH("publish", "Publish"),
+    DRAFTS("drafts", "Drafts"),
     INSIGHTS("insights", "Insights")
 }
 
@@ -74,6 +81,9 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
     val currentTab = Tab.entries.firstOrNull { it.route == currentRoute }
+    // The scheduled post being edited, if any — set from Publish's Edit
+    // action, cleared once the edit is saved or abandoned.
+    var postToEdit by remember { mutableStateOf<Post?>(null) }
 
     Scaffold(
         topBar = {
@@ -100,10 +110,11 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
-                listOf(Tab.CREATE, Tab.PUBLISH, Tab.INSIGHTS).forEach { tab ->
+                listOf(Tab.CREATE, Tab.PUBLISH, Tab.DRAFTS, Tab.INSIGHTS).forEach { tab ->
                     NavigationBarItem(
                         selected = currentTab == tab,
                         onClick = {
+                            if (tab == Tab.CREATE) postToEdit = null
                             nav.navigate(tab.route) {
                                 popUpTo(nav.graph.startDestinationId) { saveState = true }
                                 launchSingleTop = true
@@ -114,6 +125,7 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
                             when (tab) {
                                 Tab.CREATE -> Icon(Icons.Default.Add, null)
                                 Tab.PUBLISH -> Icon(Icons.Default.CalendarMonth, null)
+                                Tab.DRAFTS -> Icon(Icons.Default.EditNote, null)
                                 Tab.INSIGHTS -> Icon(Icons.Default.BarChart, null)
                             }
                         },
@@ -126,6 +138,7 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
             if (currentTab != Tab.CREATE && currentRoute != "page") {
                 FloatingActionButton(
                     onClick = {
+                        postToEdit = null
                         nav.navigate(Tab.CREATE.route) {
                             popUpTo(nav.graph.startDestinationId) { saveState = true }
                             launchSingleTop = true
@@ -146,23 +159,44 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
             modifier = Modifier.padding(padding)
         ) {
             composable(Tab.PUBLISH.route) {
-                PublishScreen(onCreate = {
-                    nav.navigate(Tab.CREATE.route) { launchSingleTop = true }
-                })
+                PublishScreen(
+                    onCreate = {
+                        postToEdit = null
+                        nav.navigate(Tab.CREATE.route) { launchSingleTop = true }
+                    },
+                    onEdit = { post ->
+                        postToEdit = post
+                        nav.navigate(Tab.CREATE.route) { launchSingleTop = true }
+                    }
+                )
             }
             composable(Tab.CREATE.route) {
                 CreateScreen(
                     onDone = {
+                        postToEdit = null
                         nav.navigate(Tab.PUBLISH.route) {
                             popUpTo(nav.graph.startDestinationId) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
                         }
                     },
-                    onConnectPage = { nav.navigate("page") { launchSingleTop = true } }
+                    onConnectPage = { nav.navigate("page") { launchSingleTop = true } },
+                    editPost = postToEdit
                 )
             }
             composable(Tab.INSIGHTS.route) { InsightsScreen() }
+            composable(Tab.DRAFTS.route) {
+                DraftsScreen(
+                    onCreate = {
+                        postToEdit = null
+                        nav.navigate(Tab.CREATE.route) { launchSingleTop = true }
+                    },
+                    onEdit = { post ->
+                        postToEdit = post
+                        nav.navigate(Tab.CREATE.route) { launchSingleTop = true }
+                    }
+                )
+            }
             composable("page") { PageScreen(callbackManager = fbCallbackManager) }
         }
     }

@@ -52,10 +52,10 @@ private val dateFmt = SimpleDateFormat("EEEE, d MMMM", Locale.getDefault())
 @Composable
 fun PublishScreen(
     onCreate: () -> Unit,
+    onEdit: (com.facebookpostplanner.data.local.Post) -> Unit = {},
     vm: PublishViewModel = viewModel()
 ) {
     val queue by vm.queue.collectAsState(initial = emptyList())
-    val drafts by vm.drafts.collectAsState(initial = emptyList())
     val paused by vm.paused.collectAsState()
     val error by vm.error.collectAsState()
     val slots = vm.todaySlots()
@@ -130,7 +130,7 @@ fun PublishScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (slotsWithPosts.isEmpty() && drafts.isEmpty()) {
+            if (slotsWithPosts.isEmpty()) {
                 item {
                     Column(
                         Modifier.fillMaxWidth().padding(top = 48.dp),
@@ -191,18 +191,11 @@ fun PublishScreen(
                             // let a tap publish it ahead of time by mistake.
                             onPublishNow = { vm.publishNow(post) },
                             onDelete = { vm.delete(post) },
-                            onRetry = if (post.status == PostStatus.FAILED) ({ vm.publishNow(post) }) else null
+                            onRetry = if (post.status == PostStatus.FAILED) ({ vm.publishNow(post) }) else null,
+                            onEdit = if (post.status == PostStatus.SCHEDULED || post.status == PostStatus.FAILED) ({ onEdit(post) }) else null
                         )
                         Spacer(Modifier.height(10.dp))
                     }
-                }
-            }
-            if (drafts.isNotEmpty()) {
-                item {
-                    Text("Drafts", style = MaterialTheme.typography.titleMedium)
-                }
-                items(drafts) { post ->
-                    PostCard(post = post, onDelete = { vm.delete(post) })
                 }
             }
         }

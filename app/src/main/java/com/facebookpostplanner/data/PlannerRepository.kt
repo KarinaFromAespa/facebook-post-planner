@@ -89,7 +89,8 @@ class PlannerRepository(context: Context) {
         hashtags: String,
         mediaUris: List<Uri>,
         scheduledAtMillis: Long?,
-        publishNow: Boolean
+        publishNow: Boolean,
+        saveAsDraft: Boolean = false
     ): Post {
         val post = Post(
             id = UUID.randomUUID().toString(),
@@ -98,11 +99,13 @@ class PlannerRepository(context: Context) {
             hashtags = hashtags.trim(),
             mediaUris = mediaUris.joinToString(",") { it.toString() },
             mediaKind = if (type == PostType.REEL) "video" else if (mediaUris.isNotEmpty()) "photo" else "",
+            // A draft keeps its planned time (if one was picked) — it just
+            // doesn't publish until it is scheduled.
             scheduledAtMillis = scheduledAtMillis,
             status = when {
                 publishNow -> PostStatus.PUBLISHING
-                scheduledAtMillis != null -> PostStatus.SCHEDULED
-                else -> PostStatus.DRAFT
+                saveAsDraft || scheduledAtMillis == null -> PostStatus.DRAFT
+                else -> PostStatus.SCHEDULED
             }
         )
         dao.upsert(post)
@@ -134,6 +137,57 @@ class PlannerRepository(context: Context) {
             throw e
         }
         return post
+    }
+
+    /**
+     * Edit a scheduled post or draft: change its time/date, caption,
+     * hashtags or photos. PATCHes the same backend post (so its place in
+     * the queue and its id are kept) and updates the local copy. New photos
+     * replace the old ones; no new photos means the old ones stay.
+     */
+    suspend fun updatePost(
+        post: Post,
+        type: PostType,
+        caption: String,
+        hashtags: String,
+        mediaUris: List<Uri>,
+        scheduledAtMillis: Long?,
+        saveAsDraft: Boolean = false
+    ): Post {
+        val updated = post.copy(
+            type = type,
+            caption = caption.trim(),
+            hashtags = hashtags.trim(),
+            mediaUris = if (mediaUris.isNotEmpty()) mediaUris.joinToString(",") { it.toString() } else post.mediaUris,
+            mediaKind = if (type == PostType.REEL) "video" else if (mediaUris.isNotEmpty()) "photo" else post.mediaKind,
+            scheduledAtMillis = scheduledAtMillis,
+            status = if (saveAsDraft || scheduledAtMillis == null) PostStatus.DRAFT else PostStatus.SCHEDULED,
+            failureReason = null,
+            updatedAtMillis = System.currentTimeMillis()
+        )
+        dao.upsert(updated)
+        runCatching {
+            val backendId = post.backendId ?: post.id
+            api().updatePost(
+                backendId,
+                com.facebookpostplanner.data.remote.UpdatePostRequest(
+                    type = type.toApi(), caption = updated.caption,
+                    hashtags = updated.hashtags.ifBlank { null },
+                    scheduledAt = scheduledAtMillis?.let { iso(it) },
+                    status = updated.status.toApi(), pageId = currentPageId()
+                )
+            )
+            if (mediaUris.isNotEmpty()) {
+                runCatching { api().clearMedia(backendId) }
+                mediaUris.forEach { uri ->
+                    runCatching { uploadMedia(backendId, uri) }
+                }
+            }
+        }.onFailure { e ->
+            dao.upsert(updated.copy(status = PostStatus.FAILED, failureReason = e.message))
+            throw e
+        }
+        return updated
     }
 
     private suspend fun uploadMedia(backendId: String, uri: Uri) {

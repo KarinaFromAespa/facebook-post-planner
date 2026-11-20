@@ -5,8 +5,10 @@ import com.facebookpostplanner.data.local.PostType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
@@ -29,6 +31,17 @@ data class CreatePostRequest(
     val scheduledAt: String?, // ISO-8601, null = draft
     val status: String,
     val publishNow: Boolean = false,
+    val pageId: String? = null
+)
+
+/** Edit a scheduled post or draft: the same fields as create, all optional
+ * except the ones being changed. The backend PATCHes the same post. */
+data class UpdatePostRequest(
+    val type: String? = null,
+    val caption: String? = null,
+    val hashtags: String? = null,
+    val scheduledAt: String? = null,
+    val status: String? = null,
     val pageId: String? = null
 )
 
@@ -78,6 +91,12 @@ interface PlannerApi {
 
     @POST("api/posts")
     suspend fun createPost(@Body req: CreatePostRequest): PostDto
+
+    @PATCH("api/posts/{id}")
+    suspend fun updatePost(@Path("id") id: String, @Body req: UpdatePostRequest): PostDto
+
+    @DELETE("api/posts/{id}/media")
+    suspend fun clearMedia(@Path("id") id: String): PostDto
 
     @Multipart
     @POST("api/posts/{id}/media")

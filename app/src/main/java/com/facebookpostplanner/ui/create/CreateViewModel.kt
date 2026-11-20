@@ -31,6 +31,18 @@ class CreateViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setType(t: PostType) { _type.value = t }
 
+    // The post being edited, if any — set by loadForEdit. When set, save()
+    // PATCHes this post instead of creating a new one.
+    private var editingPost: com.facebookpostplanner.data.local.Post? = null
+    val editing: Boolean get() = editingPost != null
+
+    fun loadForEdit(post: com.facebookpostplanner.data.local.Post) {
+        editingPost = post
+        _type.value = post.type
+    }
+
+    fun clearEdit() { editingPost = null }
+
     /** Next hourly slot today, defaulting to the next hour (min 2 min ahead is enforced by the backend). */
     fun defaultScheduleMillis(): Long {
         val cal = Calendar.getInstance()
@@ -44,7 +56,8 @@ class CreateViewModel(app: Application) : AndroidViewModel(app) {
         hashtags: String,
         mediaUris: List<Uri>,
         scheduledAtMillis: Long?,
-        publishNow: Boolean
+        publishNow: Boolean,
+        saveAsDraft: Boolean = false
     ) = viewModelScope.launch {
         if (caption.isBlank() && mediaUris.isEmpty()) {
             _error.value = "Add text or media first."
@@ -60,7 +73,14 @@ class CreateViewModel(app: Application) : AndroidViewModel(app) {
         }
         _saving.value = true
         runCatching {
-            repo.createPost(_type.value, caption, hashtags, mediaUris, scheduledAtMillis, publishNow)
+            val editing = editingPost
+            if (editing != null) {
+                val updated = repo.updatePost(editing, _type.value, caption, hashtags, mediaUris, scheduledAtMillis, saveAsDraft)
+                if (publishNow) repo.publishNow(updated)
+                editingPost = null
+            } else {
+                repo.createPost(_type.value, caption, hashtags, mediaUris, scheduledAtMillis, publishNow, saveAsDraft)
+            }
         }.onSuccess { _done.value = true }
             .onFailure { _error.value = "Saved locally, backend sync failed: ${it.message}" }
         _saving.value = false

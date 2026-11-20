@@ -41,6 +41,7 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -54,6 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.data.local.PostType
 import com.facebookpostplanner.ui.components.MediaCollage
 import java.text.SimpleDateFormat
@@ -74,6 +76,7 @@ import java.util.Locale
 fun CreateScreen(
     onDone: () -> Unit,
     onConnectPage: () -> Unit,
+    editPost: Post? = null,
     vm: CreateViewModel = viewModel()
 ) {
     val type by vm.type.collectAsState()
@@ -82,15 +85,37 @@ fun CreateScreen(
     val done by vm.done.collectAsState()
     val pageName by vm.pageName.collectAsState()
 
-    var caption by remember { mutableStateOf("") }
-    var hashtags by remember { mutableStateOf("") }
-    var schedule by remember { mutableStateOf<Long?>(vm.defaultScheduleMillis()) }
+    var caption by remember { mutableStateOf(editPost?.caption ?: "") }
+    var hashtags by remember { mutableStateOf(editPost?.hashtags ?: "") }
+    var schedule by remember { mutableStateOf<Long?>(editPost?.scheduledAtMillis ?: vm.defaultScheduleMillis()) }
+    // When true the composer saves as a draft (keeping any picked time as
+    // the draft's planned time) instead of scheduling it.
+    var saveAsDraft by remember { mutableStateOf(false) }
     val media = remember { mutableStateListOf<Uri>() }
+    var scheduleError by remember { mutableStateOf<String?>(null) }
+
+    // Editing a scheduled post: pre-fill the form and tell the ViewModel
+    // to PATCH this post on save instead of creating a new one.
+    LaunchedEffect(editPost?.id) {
+        if (editPost != null) {
+            vm.loadForEdit(editPost)
+            caption = editPost.caption
+            hashtags = editPost.hashtags
+            // A past planned/scheduled time must be changed before it can
+            // be scheduled again — prompt for a new time.
+            val t = editPost.scheduledAtMillis
+            if (t != null && t < System.currentTimeMillis() + 2 * 60 * 1000) {
+                schedule = null
+                scheduleError = "This post's planned time has passed — pick a new time."
+            } else {
+                schedule = t
+            }
+        }
+    }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var pickedDateMillis by remember { mutableStateOf<Long?>(null) }
-    var scheduleError by remember { mutableStateOf<String?>(null) }
     val dateState = rememberDatePickerState(
         initialSelectedDateMillis = schedule ?: System.currentTimeMillis()
     )
@@ -117,7 +142,7 @@ fun CreateScreen(
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
     ) {
-        Text("Create", style = MaterialTheme.typography.headlineMedium)
+        Text(if (editPost != null) "Edit post" else "Create", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(16.dp))
 
         // Posting to — Page avatar + name, like Buffer's channel row.
@@ -218,7 +243,19 @@ fun CreateScreen(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "${media.size} selected — tap × on a photo to remove it.",
+                "${media.size} new selected — these replace the current photos on save.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else if (editPost != null && editPost.mediaList.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            MediaCollage(
+                uris = editPost.mediaList,
+                isVideo = type == PostType.REEL
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "${editPost.mediaList.size} photo${if (editPost.mediaList.size > 1) "s" else ""} on this post — pick new ones to replace them.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -246,13 +283,13 @@ fun CreateScreen(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (schedule == null) "Draft" else "Scheduled",
+                        if (saveAsDraft || schedule == null) "Draft" else "Scheduled",
                         style = MaterialTheme.typography.labelMedium
                     )
                     Text(
                         schedule?.let {
                             SimpleDateFormat("HH:mm, d MMM", Locale.getDefault())
-                                .format(Date(it))
+                                .format(Date(it)) + if (saveAsDraft) " (planned — draft)" else ""
                         } ?: "No time — saves as a draft",
                         style = MaterialTheme.typography.bodyLarge
                     )
@@ -262,11 +299,13 @@ fun CreateScreen(
         }
         Spacer(Modifier.height(8.dp))
         Row {
-            OutlinedButton(onClick = { schedule = vm.defaultScheduleMillis() }) {
+            OutlinedButton(onClick = { schedule = vm.defaultScheduleMillis(); saveAsDraft = false }) {
                 Text("Next hour")
             }
             OutlinedButton(
-                onClick = { schedule = null },
+                // Keeps any picked time as the draft's planned time — it
+                // does NOT clear the time.
+                onClick = { saveAsDraft = true },
                 modifier = Modifier.padding(start = 8.dp)
             ) { Text("Save as draft") }
         }
@@ -277,9 +316,9 @@ fun CreateScreen(
         Spacer(Modifier.height(20.dp))
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Button(
-            onClick = { vm.save(storySafe(caption), storySafe(hashtags), media.toList(), schedule, publishNow = false) },
+            onClick = { vm.save(storySafe(caption), storySafe(hashtags), media.toList(), schedule, publishNow = false, saveAsDraft = saveAsDraft) },
             enabled = !saving, modifier = Modifier.fillMaxWidth()
-        ) { Text(if (schedule == null) "Save draft" else "Add to Queue") }
+        ) { Text(if (editPost != null) "Save changes" else if (saveAsDraft || schedule == null) "Save draft" else "Add to Queue") }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
             onClick = { vm.save(storySafe(caption), storySafe(hashtags), media.toList(), null, publishNow = true) },
@@ -328,6 +367,7 @@ fun CreateScreen(
                         scheduleError = "Pick a time at least 2 minutes ahead."
                     } else {
                         schedule = picked
+                        saveAsDraft = false
                         scheduleError = null
                     }
                     showTimePicker = false

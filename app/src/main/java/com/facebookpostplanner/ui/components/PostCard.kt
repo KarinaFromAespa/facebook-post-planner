@@ -58,6 +58,7 @@ fun PostCard(
     onPublishNow: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
+    onEdit: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -83,7 +84,7 @@ fun PostCard(
                     )
                 )
                 Spacer(Modifier.weight(1f))
-                if (onPublishNow != null || onDelete != null || onRetry != null) {
+                if (onPublishNow != null || onDelete != null || onRetry != null || onEdit != null) {
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Post options")
                     }
@@ -101,6 +102,12 @@ fun PostCard(
                             DropdownMenuItem(
                                 text = { Text("Publish now") },
                                 onClick = { menuOpen = false; publishNow() }
+                            )
+                        }
+                        onEdit?.let { edit ->
+                            DropdownMenuItem(
+                                text = { Text("Edit") },
+                                onClick = { menuOpen = false; edit() }
                             )
                         }
                         onDelete?.let { delete ->
