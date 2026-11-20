@@ -7,13 +7,18 @@ import androidx.lifecycle.viewModelScope
 import com.facebookpostplanner.data.PlannerRepository
 import com.facebookpostplanner.data.local.PostType
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
 class CreateViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = PlannerRepository(app)
+
+    val pageName: StateFlow<String?> =
+        repo.selectedPageName.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _type = MutableStateFlow(PostType.POST)
     val type: StateFlow<PostType> = _type.asStateFlow()

@@ -28,7 +28,13 @@ data class CreatePostRequest(
     val hashtags: String?,
     val scheduledAt: String?, // ISO-8601, null = draft
     val status: String,
-    val publishNow: Boolean = false
+    val publishNow: Boolean = false,
+    val pageId: String? = null
+)
+
+data class PageDto(
+    val id: String,
+    val name: String
 )
 
 data class QueueStateDto(val paused: Boolean)
@@ -48,6 +54,9 @@ data class InsightDto(
 )
 
 interface PlannerApi {
+    @GET("api/pages")
+    suspend fun pages(): List<PageDto>
+
     @GET("api/queue")
     suspend fun queue(): List<PostDto>
 

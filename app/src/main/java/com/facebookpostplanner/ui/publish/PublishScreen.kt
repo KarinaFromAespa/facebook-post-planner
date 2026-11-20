@@ -28,9 +28,10 @@ import java.util.Locale
 private val slotFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
 
 /**
- * Publish tab = home. Today list grouped by hourly slot (08:00–18:00).
- * Multiple items can share a slot — each keeps its own status/failure.
- * Drafts are shown in a separate section below the queue.
+ * Publish tab = home. Today list grouped by hourly slot.
+ * Only slots that actually have a scheduled post are shown — empty hours
+ * are not listed. Multiple items can share a slot — each keeps its own
+ * status/failure. Drafts are shown in a separate section below the queue.
  */
 @Composable
 fun PublishScreen(
@@ -58,24 +59,31 @@ fun PublishScreen(
         Button(onClick = onCreate, modifier = Modifier.fillMaxWidth()) { Text("+ Schedule a post") }
         Spacer(Modifier.height(12.dp))
 
+        // Only slots with at least one scheduled post get a section.
+        val slotsWithPosts = slots.map { slot ->
+            slot to queue.filter {
+                it.scheduledAtMillis?.let { t -> slotFmt.format(Date(t)) == slotFmt.format(Date(slot)) } == true
+            }
+        }.filter { it.second.isNotEmpty() }
+
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // One section per hourly slot; empty slots show as a quiet line.
-            items(slots) { slot ->
-                val atSlot = queue.filter {
-                    it.scheduledAtMillis?.let { t -> slotFmt.format(Date(t)) == slotFmt.format(Date(slot)) } == true
+            if (slotsWithPosts.isEmpty() && drafts.isEmpty()) {
+                item {
+                    Text(
+                        "Nothing scheduled yet — tap \"+ Schedule a post\" to line up the day.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
+            }
+            items(slotsWithPosts) { (slot, atSlot) ->
                 Text(slotFmt.format(Date(slot)), style = MaterialTheme.typography.titleMedium)
-                if (atSlot.isEmpty()) {
-                    Text("— empty —", style = MaterialTheme.typography.bodySmall)
-                } else {
-                    atSlot.forEach { post ->
-                        PostCard(
-                            post = post,
-                            onPublishNow = { vm.publishNow(post) },
-                            onDelete = { vm.delete(post) },
-                            onRetry = { vm.publishNow(post) }
-                        )
-                    }
+                atSlot.forEach { post ->
+                    PostCard(
+                        post = post,
+                        onPublishNow = { vm.publishNow(post) },
+                        onDelete = { vm.delete(post) },
+                        onRetry = { vm.publishNow(post) }
+                    )
                 }
             }
             if (drafts.isNotEmpty()) {

@@ -44,6 +44,19 @@ class PlannerRepository(context: Context) {
 
     private fun api(): PlannerApi = ApiFactory.create(settings.currentBackendUrl())
 
+    val selectedPageId: Flow<String?> = settings.pageId
+    val selectedPageName: Flow<String?> = settings.pageName
+    fun currentPageId(): String? = settings.currentPageId()
+    fun currentPageName(): String? = settings.currentPageName()
+    suspend fun setPage(id: String?, name: String?) = settings.setPage(id, name)
+
+    /** Pages the backend knows about (from the Page token it holds). Empty when the backend is unreachable or has no Page configured yet. */
+    suspend fun pages(): List<com.facebookpostplanner.data.remote.PageDto> =
+        runCatching { api().pages() }.getOrDefault(emptyList())
+
+    suspend fun setBackendUrl(url: String) = settings.setBackendUrl(url)
+    fun backendUrl(): Flow<String> = settings.backendUrl
+
     suspend fun refreshQueue() {
         runCatching { api().queue() }.onSuccess { dtos ->
             dtos.forEach { dao.upsert(it.toLocal()) }
@@ -80,7 +93,8 @@ class PlannerRepository(context: Context) {
                     type = type.toApi(), caption = post.caption,
                     hashtags = post.hashtags.ifBlank { null },
                     scheduledAt = scheduledAtMillis?.let { iso(it) },
-                    status = post.status.toApi(), publishNow = publishNow
+                    status = post.status.toApi(), publishNow = publishNow,
+                    pageId = currentPageId()
                 )
             )
             dao.upsert(post.copy(backendId = dto.id))

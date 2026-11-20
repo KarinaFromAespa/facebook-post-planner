@@ -17,6 +17,8 @@ import java.util.concurrent.TimeUnit
 
 private val Context.dataStore by preferencesDataStore("planner_settings")
 private val BACKEND_URL_KEY = stringPreferencesKey("backend_url")
+private val PAGE_ID_KEY = stringPreferencesKey("page_id")
+private val PAGE_NAME_KEY = stringPreferencesKey("page_name")
 
 class SettingsStore(private val context: Context) {
     val backendUrl: Flow<String> = context.dataStore.data.map {
@@ -26,6 +28,17 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[BACKEND_URL_KEY] = url.trim().trimEnd('/') }
     }
     fun currentBackendUrl(): String = runBlocking { backendUrl.first() }
+
+    val pageId: Flow<String?> = context.dataStore.data.map { it[PAGE_ID_KEY] }
+    val pageName: Flow<String?> = context.dataStore.data.map { it[PAGE_NAME_KEY] }
+    suspend fun setPage(id: String?, name: String?) {
+        context.dataStore.edit {
+            if (id == null) it.remove(PAGE_ID_KEY) else it[PAGE_ID_KEY] = id
+            if (name == null) it.remove(PAGE_NAME_KEY) else it[PAGE_NAME_KEY] = name
+        }
+    }
+    fun currentPageId(): String? = runBlocking { pageId.first() }
+    fun currentPageName(): String? = runBlocking { pageName.first() }
 }
 
 object ApiFactory {
