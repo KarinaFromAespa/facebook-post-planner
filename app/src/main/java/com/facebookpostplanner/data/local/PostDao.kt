@@ -29,4 +29,11 @@ interface PostDao {
 
     @Query("DELETE FROM posts WHERE id = :id")
     suspend fun delete(id: String)
+
+    /** Removes a stale local row for a backend post when the same post is
+     * also stored under its backend id — i.e. the row created locally with
+     * a random UUID before the backend assigned an id. Without this, one
+     * scheduled post shows up twice in the queue. */
+    @Query("DELETE FROM posts WHERE backendId = :backendId AND id != :backendId")
+    suspend fun deleteDuplicatesForBackendId(backendId: String)
 }

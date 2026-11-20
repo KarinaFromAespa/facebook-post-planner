@@ -73,7 +73,13 @@ class PlannerRepository(context: Context) {
 
     suspend fun refreshQueue() {
         runCatching { api().queue() }.onSuccess { dtos ->
-            dtos.forEach { dao.upsert(it.toLocal()) }
+            dtos.forEach { dto ->
+                // A post created in the app first lives under a random local
+                // id; the backend pull keys it by the backend id. Drop the
+                // stale local row first, or the same post shows twice.
+                dao.deleteDuplicatesForBackendId(dto.id)
+                dao.upsert(dto.toLocal())
+            }
         }
     }
 
@@ -111,7 +117,11 @@ class PlannerRepository(context: Context) {
                     pageId = currentPageId()
                 )
             )
-            dao.upsert(post.copy(backendId = dto.id))
+            // Re-key the local row by the backend id (dropping the random
+            // local-UUID row), so a later backend pull updates this same row
+            // instead of adding a second copy of the post.
+            dao.delete(post.id)
+            dao.upsert(post.copy(id = dto.id, backendId = dto.id))
             // Upload media files one by one; backend stores them in Object Storage.
             mediaUris.forEach { uri ->
                 runCatching { uploadMedia(dto.id, uri) }
