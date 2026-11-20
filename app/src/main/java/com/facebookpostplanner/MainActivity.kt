@@ -115,6 +115,14 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
                         selected = currentTab == tab,
                         onClick = {
                             if (tab == Tab.CREATE) postToEdit = null
+                            // The Page screen is a non-tab destination stacked
+                            // on top of the tabs. A plain tab navigate does
+                            // not leave it — tapping Create kept showing the
+                            // Page screen until the system Back button was
+                            // used — so pop it first and then switch tabs
+                            // from the tab underneath, where tab switching
+                            // works.
+                            if (currentRoute == "page") nav.popBackStack()
                             nav.navigate(tab.route) {
                                 popUpTo(nav.graph.startDestinationId) { saveState = true }
                                 launchSingleTop = true
