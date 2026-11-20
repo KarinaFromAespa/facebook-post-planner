@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.data.local.PostType
-import com.facebookpostplanner.ui.components.MediaCollage
+import com.facebookpostplanner.ui.components.MediaRow
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -236,7 +236,7 @@ fun CreateScreen(
         }
         if (media.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            MediaCollage(
+            MediaRow(
                 uris = media.map { it.toString() },
                 isVideo = type == PostType.REEL,
                 onRemove = { uri -> media.remove(Uri.parse(uri)) }
@@ -249,7 +249,7 @@ fun CreateScreen(
             )
         } else if (editPost != null && editPost.mediaList.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            MediaCollage(
+            MediaRow(
                 uris = editPost.mediaList,
                 isVideo = type == PostType.REEL
             )
