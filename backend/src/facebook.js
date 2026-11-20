@@ -102,6 +102,18 @@ async function exchangeLongLivedToken(shortToken) {
   return { token: data.access_token, longLived: true };
 }
 
+// Read one day's earnings value from an insights metric. The two
+// monetization metrics report on different scales:
+// - content_monetization_earnings: micro-units, the value is an object
+//   { amount, currency } — amount / 1e6 = dollars.
+// - monetization_approximate_earnings: a bare number, already in dollars.
+function earningsAmount(value) {
+  if (typeof value === 'number') return value;
+  if (value && typeof value.amount === 'number') return value.amount / 1e6;
+  if (value && typeof value.value === 'number') return value.value / 1e6;
+  return 0;
+}
+
 async function insights(publishedPosts) {
   if (!configured()) {
     return {
@@ -115,36 +127,83 @@ async function insights(publishedPosts) {
   const page = first
     ? { id: first.id, token: first.accessToken }
     : { id: process.env.FB_PAGE_ID, token: process.env.FB_PAGE_TOKEN };
+
+  // Page monetization total (last 30 days). These are insights METRICS
+  // (Graph v23.0) on the /insights edge — not Page fields. The old code
+  // asked for them as Page fields, which do not exist, so the call always
+  // failed and every page read as "not monetized". Reading them needs the
+  // read_insights permission on the Page token; without it the edge returns
+  // empty data instead of an error.
   let total = null;
   let monetized = false;
-  try {
-    const pageData = await graph(`/${page.id}`, {
-      params: { fields: 'monetization_approximate_earnings,content_monetization_earnings' },
-      token: page.token,
-    });
-    const earnings = pageData.monetization_approximate_earnings ?? pageData.content_monetization_earnings;
-    if (earnings != null) { monetized = true; total = Number(earnings); }
-  } catch { /* fall through as not monetized */ }
-  const posts = [];
-  for (const post of publishedPosts) {
-    if (!post.facebookPostId) continue;
+  const since = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
+  const until = Math.floor(Date.now() / 1000);
+  for (const metric of ['content_monetization_earnings', 'monetization_approximate_earnings']) {
     try {
-      const data = await graph(`/${post.facebookPostId}`, {
-        params: { fields: 'likes.summary(true),comments.summary(true),shares,insights.metric(post_impressions)' },
+      const res = await graph(`/${page.id}/insights`, {
+        params: { metric, period: 'day', since, until },
         token: page.token,
       });
-      posts.push({
-        postId: post.id,
-        likes: data.likes?.summary?.total_count ?? 0,
-        comments: data.comments?.summary?.total_count ?? 0,
-        shares: data.shares?.count ?? 0,
-        views: data.insights?.data?.[0]?.values?.[0]?.value ?? 0,
-        earningsUsd: null,
-      });
-    } catch { /* skip posts whose insights fail; do not invent numbers */ }
+      const days = res.data?.[0]?.values || [];
+      if (days.length > 0) monetized = true;
+      for (const d of days) {
+        total = (total ?? 0) + earningsAmount(d.value);
+      }
+    } catch { /* try the other metric */ }
   }
+  if (monetized) total = total ?? 0;
+
+  // Per-post details. The page's real recent posts (so Insights has
+  // something even before anything is published through the planner) plus
+  // any posts the planner published. Each field is best-effort so one
+  // blocked read does not drop the whole post.
+  const posts = [];
+  const seen = new Set();
+  const addPost = async (facebookPostId, caption) => {
+    if (!facebookPostId || seen.has(facebookPostId)) return;
+    seen.add(facebookPostId);
+    const row = { postId: facebookPostId, caption: caption || '', likes: 0, comments: 0, shares: 0, views: 0, earningsUsd: null };
+    try {
+      const d = await graph(`/${facebookPostId}`, { params: { fields: 'shares' }, token: page.token });
+      row.shares = d.shares?.count ?? 0;
+    } catch {}
+    try {
+      const d = await graph(`/${facebookPostId}`, { params: { fields: 'likes.summary(true)' }, token: page.token });
+      row.likes = d.likes?.summary?.total_count ?? 0;
+    } catch {}
+    try {
+      const d = await graph(`/${facebookPostId}`, { params: { fields: 'comments.summary(true)' }, token: page.token });
+      row.comments = d.comments?.summary?.total_count ?? 0;
+    } catch {}
+    try {
+      const res = await graph(`/${facebookPostId}/insights`, {
+        params: { metric: 'content_monetization_earnings', period: 'lifetime' },
+        token: page.token,
+      });
+      const v = res.data?.[0]?.values?.[0]?.value;
+      if (v != null) row.earningsUsd = earningsAmount(v);
+    } catch {}
+    posts.push(row);
+  };
+  for (const post of publishedPosts) {
+    await addPost(post.facebookPostId, post.caption || '');
+  }
+  try {
+    const feed = await graph(`/${page.id}/posts`, {
+      params: { fields: 'id,message,created_time', limit: 10 },
+      token: page.token,
+    });
+    for (const p of feed.data || []) await addPost(p.id, p.message || '');
+  } catch { /* no recent posts to show */ }
   posts.sort((a, b) => (b.likes + b.comments + b.shares) - (a.likes + a.comments + a.shares));
-  return { monetized, monetizationCriteria: monetized ? null : 'Page not enrolled in Content Monetization.', totalEarningsUsd: total, posts };
+  return {
+    monetized,
+    monetizationCriteria: monetized
+      ? null
+      : 'No Content Monetization earnings found in the last 30 days. If the Page is enrolled, check that the Page token has the read_insights permission (re-connect the Page after adding it) and see Meta Business Suite > Monetization > View Page eligibility.',
+    totalEarningsUsd: total,
+    posts,
+  };
 }
 
 module.exports = { configured, publishPost, insights, exchangeLongLivedToken };
