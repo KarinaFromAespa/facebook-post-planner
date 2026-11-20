@@ -18,6 +18,12 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Backend URL from gradle.properties; override in local.properties if needed.
         buildConfigField("String", "BACKEND_URL", "\"${project.findProperty("planner.backend.url") ?: "http://129.225.82.58:3000"}\"")
+        // Facebook App ID for Facebook Login (Connect Page). "0" is a
+        // placeholder — set the real App ID in gradle.properties or
+        // local.properties (planner.facebook.app.id) before logging in.
+        val fbAppId = (project.findProperty("planner.facebook.app.id") ?: "0").toString()
+        manifestPlaceholders["facebookAppId"] = fbAppId
+        manifestPlaceholders["facebookLoginScheme"] = "fb$fbAppId"
     }
 
     // Debug builds are always signed with the committed debug.keystore at the
@@ -74,5 +80,6 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp.logging)
     implementation(libs.coil.compose)
+    implementation(libs.facebook.login)
     ksp(libs.androidx.room.compiler)
 }

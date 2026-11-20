@@ -62,7 +62,8 @@ import java.util.Locale
 
 /**
  * Composer: feed post / reel (single MP4) / story (photo in v1).
- * Text + photos, hashtags. Crop is done by the system photo picker / editor
+ * Post and reel take a caption and hashtags; a story has neither — it is
+ * just the photo. Crop is done by the system photo picker / editor
  * before the URI reaches here — v1 does not ship its own cropper.
  * Schedule = a time today (hourly slots); Publish Now bypasses the queue.
  * Saving with no time = Draft.
@@ -112,6 +113,10 @@ fun CreateScreen(
         vm.resetDone()
     }
 
+    // Stories carry no caption/hashtags even if text was typed before
+    // switching type, so nothing stale is saved with a story.
+    fun storySafe(text: String) = if (type == PostType.STORY) "" else text
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
     ) {
@@ -150,16 +155,19 @@ fun CreateScreen(
             }
         }
         Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
-            value = caption, onValueChange = { caption = it },
-            label = { Text("Caption") }, modifier = Modifier.fillMaxWidth().height(140.dp)
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = hashtags, onValueChange = { hashtags = it },
-            label = { Text("Hashtags (e.g. #travel #food)") }, modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(16.dp))
+        // Stories have no caption and no hashtags — only posts and reels do.
+        if (type != PostType.STORY) {
+            OutlinedTextField(
+                value = caption, onValueChange = { caption = it },
+                label = { Text("Caption") }, modifier = Modifier.fillMaxWidth().height(140.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = hashtags, onValueChange = { hashtags = it },
+                label = { Text("Hashtags (e.g. #travel #food)") }, modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(16.dp))
+        }
 
         Text("Media", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(6.dp))
@@ -221,12 +229,12 @@ fun CreateScreen(
         Spacer(Modifier.height(16.dp))
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Button(
-            onClick = { vm.save(caption, hashtags, media.toList(), schedule, publishNow = false) },
+            onClick = { vm.save(storySafe(caption), storySafe(hashtags), media.toList(), schedule, publishNow = false) },
             enabled = !saving, modifier = Modifier.fillMaxWidth()
         ) { Text(if (schedule == null) "Save draft" else "Schedule") }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
-            onClick = { vm.save(caption, hashtags, media.toList(), null, publishNow = true) },
+            onClick = { vm.save(storySafe(caption), storySafe(hashtags), media.toList(), null, publishNow = true) },
             enabled = !saving, modifier = Modifier.fillMaxWidth()
         ) { Text("Publish now") }
         Spacer(Modifier.height(8.dp))

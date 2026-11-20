@@ -54,6 +54,20 @@ class PlannerRepository(context: Context) {
     suspend fun pages(): List<com.facebookpostplanner.data.remote.PageDto> =
         runCatching { api().pages() }.getOrDefault(emptyList())
 
+    /**
+     * Hands a Facebook-Login Page token to the backend so it can publish as
+     * that Page. Always saves the choice locally; returns true only if the
+     * backend accepted the token (its POST /api/pages/connect may not exist
+     * yet — then posts save locally and the token stays on the phone).
+     */
+    suspend fun connectPage(id: String, name: String, accessToken: String): Boolean {
+        val stored = runCatching {
+            api().connectPage(com.facebookpostplanner.data.remote.ConnectPageRequest(id, name, accessToken))
+        }.isSuccess
+        setPage(id, name)
+        return stored
+    }
+
     suspend fun setBackendUrl(url: String) = settings.setBackendUrl(url)
     fun backendUrl(): Flow<String> = settings.backendUrl
 

@@ -1,5 +1,6 @@
 package com.facebookpostplanner.ui.page
 
+import android.app.Activity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,29 +26,38 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.facebook.CallbackManager
 
 /**
- * Connect a Facebook Page.
- * The Page access token lives on the backend (env var) — the app never sees
- * it. This screen only picks which Page posts go to. If the backend has no
- * Page configured yet, a Page can be added here by ID; the backend still
- * needs its token before anything can publish.
+ * Connect a Facebook Page — the standard PostPlanner/Buffer way: sign in
+ * with Facebook, grant the Page permissions, and pick one of the Pages the
+ * account manages. The Page's token goes to the backend so the server can
+ * publish as that Page. Adding a Page by ID below is only a fallback for
+ * when Facebook Login is not set up yet (no Facebook App ID).
  */
 @Composable
-fun PageScreen(vm: PageViewModel = viewModel()) {
+fun PageScreen(
+    vm: PageViewModel = viewModel(),
+    callbackManager: CallbackManager? = null
+) {
     val pages by vm.pages.collectAsState()
     val loading by vm.loading.collectAsState()
     val error by vm.error.collectAsState()
     val selectedId by vm.selectedPageId.collectAsState()
     val selectedName by vm.selectedPageName.collectAsState()
     val backendUrl by vm.backendUrl.collectAsState()
+    val facebookPages by vm.facebookPages.collectAsState()
+    val fbStatus by vm.fbStatus.collectAsState()
+    val fbLoggingIn by vm.fbLoggingIn.collectAsState()
 
     var manualId by remember { mutableStateOf("") }
     var manualName by remember { mutableStateOf("") }
     var url by remember(backendUrl) { mutableStateOf(backendUrl) }
+    val activity = LocalContext.current as Activity
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
@@ -64,7 +74,49 @@ fun PageScreen(vm: PageViewModel = viewModel()) {
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(onClick = { vm.disconnect() }) { Text("Disconnect") }
                 } else {
-                    Text("No Page connected yet. Pick one below, or add it by ID.")
+                    Text("No Page connected yet. Sign in with Facebook below, or add a Page by ID.")
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+
+        Text("Connect with Facebook", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Sign in with the Facebook account that manages the Page. The app lists your Pages — pick one and its token goes to the backend.",
+            style = MaterialTheme.typography.bodySmall
+        )
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = {
+                if (callbackManager != null) vm.startFacebookLogin(activity, callbackManager)
+            },
+            enabled = callbackManager != null && !fbLoggingIn,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (fbLoggingIn) "Signing in…" else "Connect with Facebook") }
+        fbStatus?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, style = MaterialTheme.typography.bodySmall)
+        }
+        if (facebookPages.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            facebookPages.forEach { page ->
+                Row(
+                    Modifier.fillMaxWidth().selectable(
+                        selected = page.id == selectedId,
+                        onClick = { vm.selectFacebookPage(page) },
+                        role = Role.RadioButton
+                    ).padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = page.id == selectedId,
+                        onClick = { vm.selectFacebookPage(page) }
+                    )
+                    Column {
+                        Text(page.name)
+                        Text("ID: ${page.id}", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }

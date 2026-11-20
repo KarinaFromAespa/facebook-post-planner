@@ -37,6 +37,16 @@ data class PageDto(
     val name: String
 )
 
+/** Sent after Facebook Login: the Page the user picked plus its Page token,
+ * so the backend can publish as that Page. The backend needs a matching
+ * POST /api/pages/connect endpoint; until it has one the app still saves
+ * the choice locally and the token stays on the phone. */
+data class ConnectPageRequest(
+    val pageId: String,
+    val pageName: String,
+    val accessToken: String
+)
+
 data class QueueStateDto(val paused: Boolean)
 data class InsightsDto(
     val monetized: Boolean,
@@ -56,6 +66,9 @@ data class InsightDto(
 interface PlannerApi {
     @GET("api/pages")
     suspend fun pages(): List<PageDto>
+
+    @POST("api/pages/connect")
+    suspend fun connectPage(@Body req: ConnectPageRequest): PageDto
 
     @GET("api/queue")
     suspend fun queue(): List<PostDto>

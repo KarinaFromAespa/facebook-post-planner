@@ -1,8 +1,16 @@
 package com.facebookpostplanner.ui.page
 
+import android.app.Activity
 import android.app.Application
+import android.os.Bundle
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.facebook.CallbackManager
+import com.facebook.FacebookCallback
+import com.facebook.FacebookException
+import com.facebook.GraphRequest
+import com.facebook.login.LoginManager
+import com.facebook.login.LoginResult
 import com.facebookpostplanner.data.PlannerRepository
 import com.facebookpostplanner.data.remote.PageDto
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,6 +19,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+
+/** A Page the signed-in Facebook account manages, as returned by /me/accounts. */
+data class FacebookPage(val id: String, val name: String, val accessToken: String)
 
 class PageViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = PlannerRepository(app)
@@ -29,6 +41,14 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    private val _facebookPages = MutableStateFlow<List<FacebookPage>>(emptyList())
+    val facebookPages: StateFlow<List<FacebookPage>> = _facebookPages.asStateFlow()
+    private val _fbStatus = MutableStateFlow<String?>(null)
+    val fbStatus: StateFlow<String?> = _fbStatus.asStateFlow()
+    private val _fbLoggingIn = MutableStateFlow(false)
+    val fbLoggingIn: StateFlow<Boolean> = _fbLoggingIn.asStateFlow()
+    private var fbCallbackRegistered = false
+
     init {
         refresh()
     }
@@ -40,6 +60,82 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
             .onSuccess { _pages.value = it }
             .onFailure { _error.value = "Could not reach the backend — check the backend URL below." }
         _loading.value = false
+    }
+
+    /**
+     * Facebook Login, the standard PostPlanner/Buffer way to connect a Page:
+     * the user signs in with Facebook, grants the Page permissions, and the
+     * app lists the Pages they manage via /me/accounts — no manual Page ID.
+     * The picked Page's token is handed to the backend (POST /api/pages/connect)
+     * so the server can publish as that Page.
+     *
+     * Permissions: pages_show_list + pages_read_engagement to list Pages,
+     * pages_manage_posts so the backend may publish. In a dev-mode Facebook
+     * app the owner can use these without App Review; other users need the
+     * app reviewed and approved by Facebook first.
+     */
+    fun startFacebookLogin(activity: Activity, callbackManager: CallbackManager) {
+        if (!fbCallbackRegistered) {
+            fbCallbackRegistered = true
+            LoginManager.getInstance().registerCallback(
+                callbackManager,
+                object : FacebookCallback<LoginResult> {
+                    override fun onSuccess(result: LoginResult) {
+                        _fbLoggingIn.value = false
+                        fetchFacebookPages(result.accessToken)
+                    }
+
+                    override fun onCancel() {
+                        _fbLoggingIn.value = false
+                        _fbStatus.value = "Facebook sign-in cancelled."
+                    }
+
+                    override fun onError(error: FacebookException) {
+                        _fbLoggingIn.value = false
+                        _fbStatus.value = "Facebook sign-in failed: ${error.message}"
+                    }
+                }
+            )
+        }
+        _fbStatus.value = null
+        _fbLoggingIn.value = true
+        LoginManager.getInstance().logInWithReadPermissions(
+            activity,
+            listOf("public_profile", "pages_show_list", "pages_read_engagement", "pages_manage_posts")
+        )
+    }
+
+    private fun fetchFacebookPages(userToken: com.facebook.AccessToken) {
+        val request = GraphRequest.newGraphPathRequest(userToken, "/me/accounts") { response ->
+            val found = mutableListOf<FacebookPage>()
+            runCatching {
+                val data = response.jsonObject?.optJSONArray("data") ?: return@runCatching
+                for (i in 0 until data.length()) {
+                    val obj: JSONObject = data.getJSONObject(i)
+                    val token = obj.optString("access_token")
+                    if (token.isNotBlank()) {
+                        found += FacebookPage(obj.getString("id"), obj.getString("name"), token)
+                    }
+                }
+            }
+            _facebookPages.value = found
+            _fbStatus.value = if (found.isEmpty()) {
+                "Signed in, but no Pages were returned. The account may manage no Pages, or the app is missing the pages_show_list permission."
+            } else {
+                "Signed in — pick a Page below."
+            }
+        }
+        request.parameters = Bundle().apply { putString("fields", "id,name,access_token") }
+        request.executeAsync()
+    }
+
+    fun selectFacebookPage(page: FacebookPage) = viewModelScope.launch {
+        val stored = repo.connectPage(page.id, page.name, page.accessToken)
+        _fbStatus.value = if (stored) {
+            "Connected ${page.name} — its token is saved on the backend."
+        } else {
+            "Connected ${page.name} on this phone. The backend has no /api/pages/connect endpoint yet, so its token is not saved there — posts will save locally until the backend is updated."
+        }
     }
 
     fun selectPage(page: PageDto) = viewModelScope.launch {

@@ -1,5 +1,6 @@
 package com.facebookpostplanner
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.facebook.CallbackManager
 import com.facebookpostplanner.ui.create.CreateScreen
 import com.facebookpostplanner.ui.insights.InsightsScreen
 import com.facebookpostplanner.ui.page.PageScreen
@@ -41,9 +43,18 @@ import com.facebookpostplanner.ui.theme.PlannerTheme
  * the content (e.g. Insights showing Create's screen).
  */
 class MainActivity : ComponentActivity() {
+    // Facebook Login hands its result back through this manager.
+    private val fbCallbackManager = CallbackManager.Factory.create()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { PlannerTheme { PlannerNav() } }
+        setContent { PlannerTheme { PlannerNav(fbCallbackManager) } }
+    }
+
+    @Deprecated("Used by the Facebook SDK login flow")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        fbCallbackManager.onActivityResult(requestCode, resultCode, data)
+        super.onActivityResult(requestCode, resultCode, data)
     }
 }
 
@@ -55,7 +66,7 @@ private enum class Tab(val route: String, val label: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PlannerNav() {
+private fun PlannerNav(fbCallbackManager: CallbackManager) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
@@ -118,7 +129,7 @@ private fun PlannerNav() {
                 )
             }
             composable(Tab.INSIGHTS.route) { InsightsScreen() }
-            composable("page") { PageScreen() }
+            composable("page") { PageScreen(callbackManager = fbCallbackManager) }
         }
     }
 }
