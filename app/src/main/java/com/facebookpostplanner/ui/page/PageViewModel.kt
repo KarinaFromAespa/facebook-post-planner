@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.facebook.CallbackManager
 import com.facebook.FacebookCallback
 import com.facebook.FacebookException
+import com.facebook.FacebookSdk
 import com.facebook.GraphRequest
 import com.facebook.login.LoginManager
 import com.facebook.login.LoginResult
@@ -75,6 +76,13 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
      * app reviewed and approved by Facebook first.
      */
     fun startFacebookLogin(activity: Activity, callbackManager: CallbackManager) {
+        // Without a real App ID + client token the SDK is never initialized
+        // (see PlannerApp), and calling LoginManager then would crash.
+        // Say so instead of starting the login flow.
+        if (!FacebookSdk.isInitialized()) {
+            _fbStatus.value = "Facebook isn't set up yet — add the App ID and client token from your Facebook Developer app (gradle.properties: planner.facebook.app.id and planner.facebook.client.token), rebuild, and try again."
+            return
+        }
         if (!fbCallbackRegistered) {
             fbCallbackRegistered = true
             LoginManager.getInstance().registerCallback(

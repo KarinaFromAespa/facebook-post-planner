@@ -27,6 +27,10 @@ android {
         // The SDK rejects a bare numeric App ID written directly in the
         // manifest, so it goes in as a generated string resource instead.
         resValue("string", "facebook_app_id", fbAppId)
+        // Client token, also required by the SDK before init. Same "0"
+        // placeholder until a real Facebook app supplies one.
+        val fbClientToken = (project.findProperty("planner.facebook.client.token") ?: "0").toString()
+        resValue("string", "facebook_client_token", fbClientToken)
     }
 
     // Debug builds are always signed with the committed debug.keystore at the
