@@ -57,7 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.data.local.PostType
+import com.facebookpostplanner.ui.components.KeepTimeInFuture
 import com.facebookpostplanner.ui.components.MediaRow
+import com.facebookpostplanner.ui.components.todayOrLaterDates
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -117,7 +119,8 @@ fun CreateScreen(
     var showTimePicker by remember { mutableStateOf(false) }
     var pickedDateMillis by remember { mutableStateOf<Long?>(null) }
     val dateState = rememberDatePickerState(
-        initialSelectedDateMillis = schedule ?: System.currentTimeMillis()
+        initialSelectedDateMillis = schedule ?: System.currentTimeMillis(),
+        selectableDates = todayOrLaterDates
     )
     val context = LocalContext.current
     val timeState = rememberTimePickerState(
@@ -125,6 +128,10 @@ fun CreateScreen(
         initialMinute = 0,
         is24Hour = android.text.format.DateFormat.is24HourFormat(context)
     )
+    // When the picked day is today, a past time cannot be picked — the
+    // picker is moved to the earliest schedulable time (now + 2 min), so
+    // AM is effectively locked once it is PM.
+    KeepTimeInFuture(timeState, pickedDateMillis, showTimePicker)
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()

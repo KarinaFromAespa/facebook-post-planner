@@ -48,8 +48,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.data.local.PostStatus
+import com.facebookpostplanner.ui.components.KeepTimeInFuture
 import com.facebookpostplanner.ui.components.PostCard
 import com.facebookpostplanner.ui.components.dayLabel
+import com.facebookpostplanner.ui.components.todayOrLaterDates
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -341,12 +343,22 @@ fun PublishScreen(
                     timeInMillis = target.scheduledAtMillis ?: System.currentTimeMillis()
                 }
                 val dateState = rememberDatePickerState(
-                    initialSelectedDateMillis = target.scheduledAtMillis ?: System.currentTimeMillis()
+                    initialSelectedDateMillis = target.scheduledAtMillis ?: System.currentTimeMillis(),
+                    selectableDates = todayOrLaterDates
                 )
                 val timeState = rememberTimePickerState(
                     initialHour = targetCal.get(Calendar.HOUR_OF_DAY),
                     initialMinute = targetCal.get(Calendar.MINUTE),
                     is24Hour = android.text.format.DateFormat.is24HourFormat(LocalContext.current)
+                )
+                // When the picked day is today, a past time cannot be
+                // picked — the picker is moved to the earliest schedulable
+                // time (now + 2 min), so AM is effectively locked once it
+                // is PM.
+                KeepTimeInFuture(
+                    timeState,
+                    reschedulePickedDate ?: target.scheduledAtMillis,
+                    showRescheduleTime
                 )
                 if (showRescheduleDate) {
                     DatePickerDialog(
@@ -409,7 +421,8 @@ fun PublishScreen(
                     FilterDateStep.RANGE_END -> rangeStartPicked ?: System.currentTimeMillis()
                 }
                 val filterDateState = rememberDatePickerState(
-                    initialSelectedDateMillis = initial
+                    initialSelectedDateMillis = initial,
+                    selectableDates = todayOrLaterDates
                 )
                 DatePickerDialog(
                     onDismissRequest = { filterDateStep = null; rangeStartPicked = null },
