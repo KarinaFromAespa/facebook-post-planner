@@ -24,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,6 +57,38 @@ import java.util.Locale
 
 private val dayKeyFmt = SimpleDateFormat("yyyy-DDD", Locale.getDefault())
 private val dateFmt = SimpleDateFormat("EEEE, d MMMM", Locale.getDefault())
+private val shortDateFmt = SimpleDateFormat("MMM d", Locale.getDefault())
+
+/** Publish tab filter: everything, one day, or a date range. */
+sealed interface PublishFilter {
+    data object All : PublishFilter
+    data class Day(val dayStartMillis: Long) : PublishFilter
+    data class Range(val startDayMillis: Long, val endDayMillis: Long) : PublishFilter
+}
+
+private enum class FilterDateStep { SINGLE, RANGE_START, RANGE_END }
+
+private fun startOfDay(millis: Long): Long {
+    return Calendar.getInstance().apply {
+        timeInMillis = millis
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
+private fun endOfDay(millis: Long): Long {
+    return Calendar.getInstance().apply {
+        timeInMillis = millis
+        set(Calendar.HOUR_OF_DAY, 23)
+        set(Calendar.MINUTE, 59)
+        set(Calendar.SECOND, 59)
+        set(Calendar.MILLISECOND, 999)
+    }.timeInMillis
+}
+
+private fun shortDate(millis: Long): String = shortDateFmt.format(Date(millis))
 
 /**
  * Publish tab = home. Buffer-style timeline grouped by day: each day gets
@@ -82,6 +115,12 @@ fun PublishScreen(
     var showRescheduleTime by remember { mutableStateOf(false) }
     var reschedulePickedDate by remember { mutableStateOf<Long?>(null) }
     var rescheduleError by remember { mutableStateOf<String?>(null) }
+
+    // Publish filter: All (every scheduled post) is the default; a day
+    // shows only that day, a range shows every day from start to end.
+    var filter by remember { mutableStateOf<PublishFilter>(PublishFilter.All) }
+    var filterDateStep by remember { mutableStateOf<FilterDateStep?>(null) }
+    var rangeStartPicked by remember { mutableStateOf<Long?>(null) }
 
     // Pull the latest queue every time this tab is shown, so posts scheduled
     // elsewhere (website, or after this screen was first opened) appear.
@@ -144,6 +183,40 @@ fun PublishScreen(
             )
         }
 
+        // Filter chips, under the Today/date header: All shows every
+        // scheduled post; a day shows only that day; a range shows every
+        // day from the start date to the end date. Tapping the active
+        // Date/Range chip re-opens the picker to change it.
+        val dateChipLabel = when (val f = filter) {
+            is PublishFilter.Day -> shortDate(f.dayStartMillis)
+            else -> "Pick a date"
+        }
+        val rangeChipLabel = when (val f = filter) {
+            is PublishFilter.Range -> if (f.startDayMillis == f.endDayMillis) shortDate(f.startDayMillis)
+                else "${shortDate(f.startDayMillis)} – ${shortDate(f.endDayMillis)}"
+            else -> "Pick a range"
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = filter == PublishFilter.All,
+                onClick = { filter = PublishFilter.All },
+                label = { Text("All") }
+            )
+            FilterChip(
+                selected = filter is PublishFilter.Day,
+                onClick = { filterDateStep = FilterDateStep.SINGLE },
+                label = { Text(dateChipLabel) }
+            )
+            FilterChip(
+                selected = filter is PublishFilter.Range,
+                onClick = { filterDateStep = FilterDateStep.RANGE_START },
+                label = { Text(rangeChipLabel) }
+            )
+        }
+
         // Group by day, not by hour. The old hourly slots showed the
         // slot's start time as the header (e.g. "21:00") while a post
         // inside it was really at 21:58 — the header read as the scheduled
@@ -151,7 +224,18 @@ fun PublishScreen(
         // Grouping by day also makes posts scheduled for tomorrow (or
         // later) visible: the old slots only covered today's 24 hours, so
         // a tomorrow post matched no slot and never appeared.
-        val dayGroups = queue
+        val filteredQueue = when (val f = filter) {
+            PublishFilter.All -> queue
+            is PublishFilter.Day -> queue.filter {
+                it.scheduledAtMillis?.let { t ->
+                    dayKeyFmt.format(Date(t)) == dayKeyFmt.format(Date(f.dayStartMillis))
+                } == true
+            }
+            is PublishFilter.Range -> queue.filter {
+                it.scheduledAtMillis?.let { t -> t in f.startDayMillis..endOfDay(f.endDayMillis) } == true
+            }
+        }
+        val dayGroups = filteredQueue
             .filter { it.scheduledAtMillis != null }
             .groupBy { dayKeyFmt.format(Date(it.scheduledAtMillis!!)) }
             .map { (_, posts) ->
@@ -177,19 +261,25 @@ fun PublishScreen(
                         )
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "Nothing else is queued up",
+                            if (filter == PublishFilter.All) "Nothing else is queued up"
+                            else "No posts for this filter",
                             style = MaterialTheme.typography.titleLarge,
                             textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Tap + Schedule a post to line up the day.",
+                            if (filter == PublishFilter.All) "Tap + Schedule a post to line up the day."
+                            else "Try a different date or range, or show everything.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(16.dp))
-                        Button(onClick = onCreate) { Text("+ Schedule a post") }
+                        if (filter == PublishFilter.All) {
+                            Button(onClick = onCreate) { Text("+ Schedule a post") }
+                        } else {
+                            Button(onClick = { filter = PublishFilter.All }) { Text("Show all") }
+                        }
                     }
                 }
             }
@@ -303,6 +393,52 @@ fun PublishScreen(
                         text = { TimePicker(state = timeState) }
                     )
                 }
+            }
+        }
+
+        // Filter date picker: one date for the Day filter, two in a row
+        // (start, then end) for the Range filter. key(step) recreates the
+        // picker state when the step changes, so the end picker opens on
+        // the picked start date instead of reusing the start picker's state.
+        // A range picked backwards is ordered, not rejected.
+        filterDateStep?.let { step ->
+            key(step) {
+                val initial = when (step) {
+                    FilterDateStep.SINGLE -> (filter as? PublishFilter.Day)?.dayStartMillis ?: System.currentTimeMillis()
+                    FilterDateStep.RANGE_START -> (filter as? PublishFilter.Range)?.startDayMillis ?: System.currentTimeMillis()
+                    FilterDateStep.RANGE_END -> rangeStartPicked ?: System.currentTimeMillis()
+                }
+                val filterDateState = rememberDatePickerState(
+                    initialSelectedDateMillis = initial
+                )
+                DatePickerDialog(
+                    onDismissRequest = { filterDateStep = null; rangeStartPicked = null },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val picked = filterDateState.selectedDateMillis ?: System.currentTimeMillis()
+                            when (step) {
+                                FilterDateStep.SINGLE -> {
+                                    filter = PublishFilter.Day(startOfDay(picked))
+                                    filterDateStep = null
+                                }
+                                FilterDateStep.RANGE_START -> {
+                                    rangeStartPicked = startOfDay(picked)
+                                    filterDateStep = FilterDateStep.RANGE_END
+                                }
+                                FilterDateStep.RANGE_END -> {
+                                    val a = rangeStartPicked ?: startOfDay(picked)
+                                    val b = startOfDay(picked)
+                                    filter = PublishFilter.Range(a.coerceAtMost(b), a.coerceAtLeast(b))
+                                    filterDateStep = null
+                                    rangeStartPicked = null
+                                }
+                            }
+                        }) { Text(if (step == FilterDateStep.RANGE_START) "Next" else "Apply") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { filterDateStep = null; rangeStartPicked = null }) { Text("Cancel") }
+                    }
+                ) { DatePicker(state = filterDateState) }
             }
         }
     }
