@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -57,6 +58,10 @@ fun PublishScreen(
     val paused by vm.paused.collectAsState()
     val error by vm.error.collectAsState()
     val slots = vm.todaySlots()
+
+    // Pull the latest queue every time this tab is shown, so posts scheduled
+    // elsewhere (website, or after this screen was first opened) appear.
+    LaunchedEffect(Unit) { vm.refresh() }
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -107,10 +112,15 @@ fun PublishScreen(
             )
         }
 
-        // Only slots with at least one scheduled post get a section.
+        // A post belongs to a slot when it falls in that slot's hour on the
+        // same day — matching by exact HH:mm hid every post that wasn't
+        // scheduled exactly on the hour (e.g. 14:15 never matched 14:00).
+        val hourFmt = SimpleDateFormat("yyyy-DDD-HH", Locale.getDefault())
         val slotsWithPosts = slots.map { slot ->
             slot to queue.filter {
-                it.scheduledAtMillis?.let { t -> slotFmt.format(Date(t)) == slotFmt.format(Date(slot)) } == true
+                it.scheduledAtMillis?.let { t ->
+                    hourFmt.format(Date(t)) == hourFmt.format(Date(slot))
+                } == true
             }
         }.filter { it.second.isNotEmpty() }
 

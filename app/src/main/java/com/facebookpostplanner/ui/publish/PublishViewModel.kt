@@ -28,12 +28,23 @@ class PublishViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Hourly slots 08:00–18:00 for today, as millis. */
+    /** Hourly slots for the whole day, so a post at any hour shows up — not
+     * only 08:00–18:00. Only hours that actually have a post are displayed
+     * (PublishScreen filters the empty ones out). */
     fun todaySlots(): List<Long> {
         val cal = Calendar.getInstance()
-        return (8..18).map { hour ->
-            cal.apply { set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0) }.timeInMillis
+        return (0..23).map { hour ->
+            cal.apply { set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
         }
+    }
+
+    /** Re-pull the queue from the backend. Called when the Publish tab is
+     * shown, so posts scheduled on the website (or after this ViewModel was
+     * first created) appear — init only runs once, and the ViewModel is
+     * kept across tab switches, so init alone never re-syncs. */
+    fun refresh() = viewModelScope.launch {
+        runCatching { _paused.value = repo.queuePaused() }
+        runCatching { repo.refreshQueue() }.onFailure { _error.value = it.message }
     }
 
     fun togglePause() = viewModelScope.launch {
