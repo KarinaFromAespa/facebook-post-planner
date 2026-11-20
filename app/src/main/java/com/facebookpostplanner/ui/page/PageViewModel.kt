@@ -147,6 +147,7 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             "Connected ${page.name} on this phone. The backend has no /api/pages/connect endpoint yet, so its token is not saved there — posts will save locally until the backend is updated."
         }
+        refresh()
     }
 
     fun selectPage(page: PageDto) = viewModelScope.launch {

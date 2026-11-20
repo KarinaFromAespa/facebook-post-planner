@@ -88,7 +88,9 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
                     containerColor = MaterialTheme.colorScheme.surface
                 ),
                 actions = {
-                    IconButton(onClick = { nav.navigate("page") }) {
+                    IconButton(onClick = {
+                        nav.navigate("page") { launchSingleTop = true }
+                    }) {
                         Icon(Icons.Default.AccountCircle, contentDescription = "Connect Page")
                     }
                 }
@@ -123,7 +125,13 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
         floatingActionButton = {
             if (currentTab != Tab.CREATE && currentRoute != "page") {
                 FloatingActionButton(
-                    onClick = { nav.navigate(Tab.CREATE.route) },
+                    onClick = {
+                        nav.navigate(Tab.CREATE.route) {
+                            popUpTo(nav.graph.startDestinationId) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     elevation = FloatingActionButtonDefaults.elevation()
@@ -138,12 +146,20 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
             modifier = Modifier.padding(padding)
         ) {
             composable(Tab.PUBLISH.route) {
-                PublishScreen(onCreate = { nav.navigate(Tab.CREATE.route) })
+                PublishScreen(onCreate = {
+                    nav.navigate(Tab.CREATE.route) { launchSingleTop = true }
+                })
             }
             composable(Tab.CREATE.route) {
                 CreateScreen(
-                    onDone = { nav.navigate(Tab.PUBLISH.route) },
-                    onConnectPage = { nav.navigate("page") }
+                    onDone = {
+                        nav.navigate(Tab.PUBLISH.route) {
+                            popUpTo(nav.graph.startDestinationId) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onConnectPage = { nav.navigate("page") { launchSingleTop = true } }
                 )
             }
             composable(Tab.INSIGHTS.route) { InsightsScreen() }
