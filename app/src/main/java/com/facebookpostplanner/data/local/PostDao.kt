@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PostDao {
-    @Query("SELECT * FROM posts WHERE status != 'DRAFT' ORDER BY scheduledAtMillis ASC, createdAtMillis ASC")
+    @Query("SELECT * FROM posts WHERE status IN ('SCHEDULED', 'FAILED', 'PUBLISHING') ORDER BY scheduledAtMillis ASC, createdAtMillis ASC")
     fun queue(): Flow<List<Post>>
 
     @Query("SELECT * FROM posts WHERE status = 'DRAFT' ORDER BY updatedAtMillis DESC")

@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.facebookpostplanner.data.local.PostStatus
 import com.facebookpostplanner.ui.components.PostCard
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -184,9 +185,13 @@ fun PublishScreen(
                     atSlot.forEach { post ->
                         PostCard(
                             post = post,
+                            // "Publish now" is the intentional way to send a
+                            // scheduled post early. "Retry" is only for a
+                            // failed post — showing it on a scheduled post
+                            // let a tap publish it ahead of time by mistake.
                             onPublishNow = { vm.publishNow(post) },
                             onDelete = { vm.delete(post) },
-                            onRetry = { vm.publishNow(post) }
+                            onRetry = if (post.status == PostStatus.FAILED) ({ vm.publishNow(post) }) else null
                         )
                         Spacer(Modifier.height(10.dp))
                     }
