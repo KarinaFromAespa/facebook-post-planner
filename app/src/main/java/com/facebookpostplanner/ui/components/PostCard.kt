@@ -7,42 +7,51 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.data.local.PostStatus
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.facebookpostplanner.data.local.PostType
 
-private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
-
+// Status pills use semantic colors (green = published, red = failed) —
+// these are states, not the brand color, which stays Facebook blue.
 @Composable
 private fun statusColors(status: PostStatus): Pair<Color, Color> {
-    val scheme = MaterialTheme.colorScheme
     return when (status) {
-        PostStatus.PUBLISHED -> scheme.tertiaryContainer to scheme.onTertiaryContainer
-        PostStatus.FAILED -> scheme.errorContainer to scheme.onErrorContainer
-        PostStatus.SCHEDULED -> scheme.primaryContainer to scheme.onPrimaryContainer
-        PostStatus.PUBLISHING -> scheme.secondaryContainer to scheme.onSecondaryContainer
-        PostStatus.DRAFT -> scheme.surfaceVariant to scheme.onSurfaceVariant
+        PostStatus.PUBLISHED -> Color(0xFFE6F4EA) to Color(0xFF188038)
+        PostStatus.FAILED -> Color(0xFFFCE8E6) to Color(0xFFA50E0E)
+        PostStatus.SCHEDULED -> Color(0xFFD6E4FF) to Color(0xFF0A2E5C)
+        PostStatus.PUBLISHING -> Color(0xFFFEF7E0) to Color(0xFF8A6D00)
+        PostStatus.DRAFT -> Color(0xFFF0F2F5) to Color(0xFF606770)
     }
 }
 
+/**
+ * Buffer-style queue card: type + status pills, a 3-dot menu for the
+ * per-post actions, a caption snippet, and the media collage. The time
+ * lives on the slot header in PublishScreen, not on the card.
+ */
 @Composable
 fun PostCard(
     post: Post,
@@ -51,14 +60,21 @@ fun PostCard(
     onRetry: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    Card(modifier.fillMaxWidth()) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val (container, label) = statusColors(post.status)
+
+    Card(
+        modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
         Column(Modifier.padding(12.dp)) {
-            Row {
-                Text(timeFmt.format(Date(post.scheduledAtMillis ?: post.createdAtMillis)))
-                Spacer(Modifier.width(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 AssistChip(onClick = {}, label = { Text(post.type.name) })
                 Spacer(Modifier.width(8.dp))
-                val (container, label) = statusColors(post.status)
                 AssistChip(
                     onClick = {},
                     label = { Text(post.status.name) },
@@ -66,39 +82,64 @@ fun PostCard(
                         containerColor = container, labelColor = label
                     )
                 )
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(post.caption, maxLines = 3)
-            if (post.hashtags.isNotBlank()) {
-                Text(post.hashtags, maxLines = 1)
-            }
-            if (post.mediaList.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                LazyRow {
-                    items(post.mediaList) { uri ->
-                        AsyncImage(
-                            model = uri, contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .width(96.dp)
-                                .height(96.dp)
-                                .padding(end = 6.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                        )
+                Spacer(Modifier.weight(1f))
+                if (onPublishNow != null || onDelete != null || onRetry != null) {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Post options")
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false }
+                    ) {
+                        onRetry?.let { retry ->
+                            DropdownMenuItem(
+                                text = { Text("Retry") },
+                                onClick = { menuOpen = false; retry() }
+                            )
+                        }
+                        onPublishNow?.let { publishNow ->
+                            DropdownMenuItem(
+                                text = { Text("Publish now") },
+                                onClick = { menuOpen = false; publishNow() }
+                            )
+                        }
+                        onDelete?.let { delete ->
+                            DropdownMenuItem(
+                                text = { Text("Delete") },
+                                onClick = { menuOpen = false; delete() }
+                            )
+                        }
                     }
                 }
             }
-            post.failureReason?.let {
-                Text("Failed: $it", maxLines = 2, color = MaterialTheme.colorScheme.error)
-                onRetry?.let { retry -> TextButton(onClick = retry) { Text("Retry") } }
+            if (post.caption.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    post.caption, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
-            Row {
-                onPublishNow?.let {
-                    TextButton(onClick = it) { Text("Publish now") }
-                }
-                onDelete?.let {
-                    TextButton(onClick = it) { Text("Delete") }
-                }
+            if (post.hashtags.isNotBlank()) {
+                Text(
+                    post.hashtags, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            if (post.mediaList.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                MediaCollage(
+                    uris = post.mediaList,
+                    isVideo = post.mediaKind == "video" || post.type == PostType.REEL
+                )
+            }
+            post.failureReason?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Failed: $it", maxLines = 2,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }

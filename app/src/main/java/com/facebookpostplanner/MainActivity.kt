@@ -12,13 +12,16 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -75,7 +78,15 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Post Planner") },
+                title = {
+                    Text(
+                        "Post Planner",
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
                 actions = {
                     IconButton(onClick = { nav.navigate("page") }) {
                         Icon(Icons.Default.AccountCircle, contentDescription = "Connect Page")
@@ -84,7 +95,9 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
             )
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
                 listOf(Tab.CREATE, Tab.PUBLISH, Tab.INSIGHTS).forEach { tab ->
                     NavigationBarItem(
                         selected = currentTab == tab,
@@ -109,7 +122,12 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
         },
         floatingActionButton = {
             if (currentTab != Tab.CREATE && currentRoute != "page") {
-                FloatingActionButton(onClick = { nav.navigate(Tab.CREATE.route) }) {
+                FloatingActionButton(
+                    onClick = { nav.navigate(Tab.CREATE.route) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    elevation = FloatingActionButtonDefaults.elevation()
+                ) {
                     Icon(Icons.Default.Add, "Create")
                 }
             }

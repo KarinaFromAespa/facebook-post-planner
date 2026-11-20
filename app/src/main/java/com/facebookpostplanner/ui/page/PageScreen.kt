@@ -1,6 +1,8 @@
 package com.facebookpostplanner.ui.page
 
 import android.app.Activity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,11 +10,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -28,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.facebook.CallbackManager
@@ -63,28 +71,64 @@ fun PageScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
     ) {
         Text("Connect Page", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp)) {
-                Text("Posting to", style = MaterialTheme.typography.titleMedium)
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier.size(40.dp).background(
+                        MaterialTheme.colorScheme.primary, CircleShape
+                    ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        (selectedName?.firstOrNull() ?: '?').toString(),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Posting to", style = MaterialTheme.typography.labelMedium)
+                    if (selectedId != null) {
+                        Text(
+                            selectedName ?: selectedId!!,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "Page ID: $selectedId",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text("No Page connected yet.")
+                    }
+                }
                 if (selectedId != null) {
-                    Text(selectedName ?: selectedId!!, style = MaterialTheme.typography.bodyLarge)
-                    Text("Page ID: $selectedId", style = MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(8.dp))
                     OutlinedButton(onClick = { vm.disconnect() }) { Text("Disconnect") }
-                } else {
-                    Text("No Page connected yet. Sign in with Facebook below, or add a Page by ID.")
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
 
         Text("Connect with Facebook", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(6.dp))
         Text(
             "Sign in with the Facebook account that manages the Page. The app lists your Pages — pick one and its token goes to the backend.",
-            style = MaterialTheme.typography.bodySmall
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(8.dp))
         Button(
@@ -101,69 +145,52 @@ fun PageScreen(
         if (facebookPages.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             facebookPages.forEach { page ->
-                Row(
-                    Modifier.fillMaxWidth().selectable(
-                        selected = page.id == selectedId,
-                        onClick = { vm.selectFacebookPage(page) },
-                        role = Role.RadioButton
-                    ).padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = page.id == selectedId,
-                        onClick = { vm.selectFacebookPage(page) }
-                    )
-                    Column {
-                        Text(page.name)
-                        Text("ID: ${page.id}", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
+                PageRow(
+                    name = page.name,
+                    id = page.id,
+                    selected = page.id == selectedId,
+                    onClick = { vm.selectFacebookPage(page) }
+                )
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
 
         Text("Pages on the backend", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(6.dp))
         if (loading) {
             Text("Loading…")
         } else if (pages.isEmpty()) {
             Text(
                 "No Pages returned by the backend. Either the backend has no Page token configured yet, or it is unreachable — check the backend URL below, or add the Page by ID.",
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
             pages.forEach { page ->
-                Row(
-                    Modifier.fillMaxWidth().selectable(
-                        selected = page.id == selectedId,
-                        onClick = { vm.selectPage(page) },
-                        role = Role.RadioButton
-                    ).padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = page.id == selectedId,
-                        onClick = { vm.selectPage(page) }
-                    )
-                    Column {
-                        Text(page.name)
-                        Text("ID: ${page.id}", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
+                PageRow(
+                    name = page.name,
+                    id = page.id,
+                    selected = page.id == selectedId,
+                    onClick = { vm.selectPage(page) }
+                )
             }
         }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = { vm.refresh() }) { Text("Refresh pages") }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
 
         Text("Add a Page by ID", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = manualId, onValueChange = { manualId = it },
-            label = { Text("Page ID") }, modifier = Modifier.fillMaxWidth()
+            label = { Text("Page ID") }, modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
         )
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = manualName, onValueChange = { manualName = it },
-            label = { Text("Page name (optional)") }, modifier = Modifier.fillMaxWidth()
+            label = { Text("Page name (optional)") }, modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
         )
         Spacer(Modifier.height(8.dp))
         Button(onClick = {
@@ -171,16 +198,56 @@ fun PageScreen(
             manualId = ""
             manualName = ""
         }) { Text("Connect this Page") }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
 
         Text("Backend", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = url, onValueChange = { url = it },
-            label = { Text("Backend URL") }, modifier = Modifier.fillMaxWidth()
+            label = { Text("Backend URL") }, modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
         )
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = { vm.saveBackendUrl(url) }) { Text("Save backend URL") }
         Spacer(Modifier.height(12.dp))
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    }
+}
+
+@Composable
+private fun PageRow(
+    name: String,
+    id: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().selectable(
+            selected = selected, onClick = onClick, role = Role.RadioButton
+        ).padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Spacer(Modifier.width(4.dp))
+        Box(
+            Modifier.size(36.dp).background(
+                MaterialTheme.colorScheme.primaryContainer, CircleShape
+            ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                name.firstOrNull()?.toString() ?: "?",
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(name, fontWeight = FontWeight.Medium)
+            Text(
+                "ID: $id", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

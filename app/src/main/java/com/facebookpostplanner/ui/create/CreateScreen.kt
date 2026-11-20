@@ -14,26 +14,27 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -49,12 +50,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.facebookpostplanner.data.local.PostType
+import com.facebookpostplanner.ui.components.MediaCollage
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -67,10 +68,6 @@ import java.util.Locale
  * before the URI reaches here — v1 does not ship its own cropper.
  * Schedule = a time today (hourly slots); Publish Now bypasses the queue.
  * Saving with no time = Draft.
- *
- * Media previews are fixed-size thumbnails with a remove button, and the
- * whole screen scrolls, so the Schedule / Publish now buttons are always
- * reachable no matter how many photos are picked.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,18 +118,41 @@ fun CreateScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
     ) {
         Text("Create", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
-        Card(Modifier.fillMaxWidth()) {
+        // Posting to — Page avatar + name, like Buffer's channel row.
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
             Row(
                 Modifier.fillMaxWidth().padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Box(
+                    Modifier.size(40.dp).background(
+                        MaterialTheme.colorScheme.primary, CircleShape
+                    ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        (pageName?.firstOrNull() ?: '?').toString(),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Posting to", style = MaterialTheme.typography.labelMedium)
                     Text(
                         pageName ?: "No Page connected",
-                        style = MaterialTheme.typography.bodyLarge
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
                     )
                 }
                 TextButton(onClick = onConnectPage) {
@@ -140,98 +160,126 @@ fun CreateScreen(
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
 
         Text("Type", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(6.dp))
-        Row {
-            PostType.entries.forEach { t ->
-                FilterChip(
+        Spacer(Modifier.height(8.dp))
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            PostType.entries.forEachIndexed { index, t ->
+                SegmentedButton(
                     selected = type == t,
                     onClick = { vm.setType(t) },
-                    label = { Text(t.name.lowercase().replaceFirstChar { it.uppercase() }) },
-                    modifier = Modifier.padding(end = 8.dp)
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index, count = PostType.entries.size
+                    ),
+                    label = {
+                        Text(t.name.lowercase().replaceFirstChar { it.uppercase() })
+                    }
                 )
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
+
         // Stories have no caption and no hashtags — only posts and reels do.
         if (type != PostType.STORY) {
             OutlinedTextField(
                 value = caption, onValueChange = { caption = it },
-                label = { Text("Caption") }, modifier = Modifier.fillMaxWidth().height(140.dp)
+                label = { Text("Caption") },
+                placeholder = { Text("Write a caption…") },
+                modifier = Modifier.fillMaxWidth().height(140.dp),
+                shape = RoundedCornerShape(12.dp)
             )
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = hashtags, onValueChange = { hashtags = it },
-                label = { Text("Hashtags (e.g. #travel #food)") }, modifier = Modifier.fillMaxWidth()
+                label = { Text("Hashtags") },
+                placeholder = { Text("#travel #food") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
         }
 
         Text("Media", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = {
             picker.launch(if (type == PostType.REEL) "video/*" else "image/*")
-        }) { Text(if (type == PostType.REEL) "Pick video (MP4)" else "Pick photos") }
+        }) {
+            Icon(Icons.Default.Image, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text(if (type == PostType.REEL) "Pick video (MP4)" else "Pick photos")
+        }
         if (media.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            LazyRow {
-                items(media, key = { it.toString() }) { uri ->
-                    Box(
-                        Modifier.size(96.dp).padding(end = 6.dp)
-                    ) {
-                        AsyncImage(
-                            model = uri, contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(96.dp).clip(RoundedCornerShape(8.dp))
-                        )
-                        IconButton(
-                            onClick = { media.remove(uri) },
-                            modifier = Modifier.align(Alignment.TopEnd)
-                                .size(24.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                    CircleShape
-                                )
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Remove photo")
-                        }
-                    }
-                }
-            }
+            Spacer(Modifier.height(12.dp))
+            MediaCollage(
+                uris = media.map { it.toString() },
+                isVideo = type == PostType.REEL,
+                onRemove = { uri -> media.remove(Uri.parse(uri)) }
+            )
+            Spacer(Modifier.height(4.dp))
             Text(
                 "${media.size} selected — tap × on a photo to remove it.",
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
 
         Text("Schedule", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Scheduled: " + (schedule?.let {
-                SimpleDateFormat("HH:mm, d MMM", Locale.getDefault()).format(Date(it))
-            } ?: "Draft (no time)")
-        )
-        Spacer(Modifier.height(6.dp))
-        Row {
-            OutlinedButton(onClick = { showDatePicker = true }) { Text("Pick date & time") }
-            OutlinedButton(onClick = { schedule = vm.defaultScheduleMillis() }, modifier = Modifier.padding(start = 8.dp)) { Text("Next hour") }
-            OutlinedButton(onClick = { schedule = null }, modifier = Modifier.padding(start = 8.dp)) {
-                Text("Save as draft")
+        Spacer(Modifier.height(8.dp))
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Schedule, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (schedule == null) "Draft" else "Scheduled",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Text(
+                        schedule?.let {
+                            SimpleDateFormat("HH:mm, d MMM", Locale.getDefault())
+                                .format(Date(it))
+                        } ?: "No time — saves as a draft",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+                TextButton(onClick = { showDatePicker = true }) { Text("Change") }
             }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row {
+            OutlinedButton(onClick = { schedule = vm.defaultScheduleMillis() }) {
+                Text("Next hour")
+            }
+            OutlinedButton(
+                onClick = { schedule = null },
+                modifier = Modifier.padding(start = 8.dp)
+            ) { Text("Save as draft") }
         }
         scheduleError?.let {
             Spacer(Modifier.height(6.dp))
             Text(it, color = MaterialTheme.colorScheme.error)
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Button(
             onClick = { vm.save(storySafe(caption), storySafe(hashtags), media.toList(), schedule, publishNow = false) },
             enabled = !saving, modifier = Modifier.fillMaxWidth()
-        ) { Text(if (schedule == null) "Save draft" else "Schedule") }
+        ) { Text(if (schedule == null) "Save draft" else "Add to Queue") }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
             onClick = { vm.save(storySafe(caption), storySafe(hashtags), media.toList(), null, publishNow = true) },
@@ -241,7 +289,8 @@ fun CreateScreen(
         if (pageName == null) {
             Text(
                 "Posts save locally without a Page, but nothing can publish until one is connected.",
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
