@@ -19,7 +19,13 @@ function toDto(p) {
     id: p.id, type: p.type, caption: p.caption, hashtags: p.hashtags || null,
     scheduledAt: p.scheduledAt || null, status: p.status,
     failureReason: p.failureReason || null, facebookPostId: p.facebookPostId || null,
+    pageId: p.pageId || null,
+    media: media.mediaFor(p).map((f) => ({ url: f.url, mimetype: f.mimetype, filename: f.filename })),
   };
+}
+
+function toPageDto(p) {
+  return { id: p.id, name: p.name, connectedAt: p.connectedAt || null };
 }
 
 app.get('/health', (req, res) => res.json({
@@ -40,10 +46,12 @@ app.get('/api/drafts', (req, res) => res.json(
 ));
 
 app.post('/api/posts', (req, res) => {
-  const { type, caption, hashtags, scheduledAt, status, publishNow } = req.body || {};
+  const { type, caption, hashtags, scheduledAt, status, publishNow, pageId } = req.body || {};
   if (!TYPES.has(type)) return res.status(400).json({ error: 'type must be post, reel or story' });
-  if (typeof caption !== 'string' || !caption.trim() || caption.length > 1024) {
-    return res.status(400).json({ error: 'caption is required, max 1024 chars' });
+  // Caption may be empty (stories have none; a reel or post can be media-only).
+  // The clients still require text OR media before they send anything.
+  if (typeof caption !== 'string' || caption.length > 1024) {
+    return res.status(400).json({ error: 'caption must be a string, max 1024 chars' });
   }
   if (scheduledAt && Number.isNaN(Date.parse(scheduledAt))) {
     return res.status(400).json({ error: 'scheduledAt must be ISO-8601' });
@@ -53,6 +61,7 @@ app.post('/api/posts', (req, res) => {
     hashtags: hashtags || null, scheduledAt: scheduledAt || null,
     status: publishNow ? 'publishing' : (STATUSES.has(status) ? status : (scheduledAt ? 'scheduled' : 'draft')),
     failureReason: null, facebookPostId: null, mediaFiles: [],
+    pageId: pageId || null,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
   store.upsertPost(post);
@@ -99,6 +108,32 @@ app.post('/api/posts/:id/publish-now', async (req, res) => {
 app.get('/api/queue/state', (req, res) => res.json({ paused: store.isQueuePaused() }));
 app.post('/api/queue/pause', (req, res) => res.json({ paused: store.setQueuePaused(true) }));
 app.post('/api/queue/resume', (req, res) => res.json({ paused: store.setQueuePaused(false) }));
+
+app.get('/api/pages', (req, res) => res.json(store.allPages().map(toPageDto)));
+
+app.post('/api/pages/connect', async (req, res) => {
+  const { pageId, pageName, accessToken } = req.body || {};
+  if (!pageId || typeof pageId !== 'string') return res.status(400).json({ error: 'pageId is required' });
+  if (!accessToken || typeof accessToken !== 'string') return res.status(400).json({ error: 'accessToken is required' });
+  try {
+    // Short-lived Page tokens (~1-2h) are exchanged for long-lived ones
+    // (60 days) when FB_APP_ID + FB_APP_SECRET are set as backend env vars.
+    // Without them the token is stored as-is and reported as short-lived.
+    const { token, longLived } = await facebook.exchangeLongLivedToken(accessToken);
+    const page = store.upsertPage({
+      id: pageId, name: pageName || pageId, accessToken: token,
+      longLived, connectedAt: new Date().toISOString(),
+    });
+    res.status(201).json({ ...toPageDto(page), longLived });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete('/api/pages/:id', (req, res) => {
+  store.deletePage(req.params.id);
+  res.json({ ok: true });
+});
 
 app.get('/api/insights', async (req, res) => {
   const published = store.allPosts().filter((p) => p.status === 'published');

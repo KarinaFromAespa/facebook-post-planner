@@ -10,10 +10,18 @@ const upload = multer({
   limits: { fileSize: 200 * 1024 * 1024 },
 });
 
+function publicBaseUrl() {
+  return (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+}
+
 function mediaFor(post) {
+  const base = publicBaseUrl();
   return (post.mediaFiles || []).map((f) => ({
     ...f,
-    url: f.url || `/uploads/${path.basename(f.path)}`,
+    // Facebook must be able to fetch the file, so the URL is absolute once
+    // PUBLIC_BASE_URL is set (the VM's public address). Without it the
+    // relative path still works through the website's /uploads proxy.
+    url: f.url || `${base}/uploads/${path.basename(f.path)}`,
   }));
 }
 

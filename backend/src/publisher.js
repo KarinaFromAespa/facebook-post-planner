@@ -7,6 +7,12 @@ async function publishOne(post) {
   try {
     const result = await facebook.publishPost(post, media.mediaFor(post));
     if (!result.ok) throw new Error(result.reason);
+    // A publish only counts when Facebook returns a post ID. Without one
+    // the post stays failed and its media is kept, so a retry can use it —
+    // the old code marked any {ok:true} as published and deleted the media.
+    if (!result.facebookPostId) {
+      throw new Error('Facebook accepted the post but returned no post ID; keeping it queued and its media intact.');
+    }
     const done = {
       ...post, status: 'published', facebookPostId: result.facebookPostId,
       failureReason: null, updatedAt: new Date().toISOString(),
