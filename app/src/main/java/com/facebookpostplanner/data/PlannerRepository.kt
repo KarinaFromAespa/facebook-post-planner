@@ -72,14 +72,22 @@ class PlannerRepository(context: Context) {
     fun backendUrl(): Flow<String> = settings.backendUrl
 
     suspend fun refreshQueue() {
-        runCatching { api().queue() }.onSuccess { dtos ->
-            dtos.forEach { dto ->
-                // A post created in the app first lives under a random local
-                // id; the backend pull keys it by the backend id. Drop the
-                // stale local row first, or the same post shows twice.
-                dao.deleteDuplicatesForBackendId(dto.id)
-                dao.upsert(dto.toLocal())
-            }
+        // Sync every post, not just the queue. /api/queue only returns
+        // scheduled posts, so once the backend published one it dropped
+        // out of the response and Room kept it SCHEDULED forever — it
+        // stayed on the Publish tab as a ghost long after it went out.
+        // /api/posts returns all statuses, so published posts become
+        // PUBLISHED (and leave the queue) and failed ones become FAILED
+        // (and keep their Retry). Fall back to /api/queue if the backend
+        // does not have /api/posts yet.
+        val dtos = runCatching { api().allPosts() }
+            .getOrElse { runCatching { api().queue() }.getOrNull() } ?: return
+        dtos.forEach { dto ->
+            // A post created in the app first lives under a random local
+            // id; the backend pull keys it by the backend id. Drop the
+            // stale local row first, or the same post shows twice.
+            dao.deleteDuplicatesForBackendId(dto.id)
+            dao.upsert(dto.toLocal())
         }
     }
 

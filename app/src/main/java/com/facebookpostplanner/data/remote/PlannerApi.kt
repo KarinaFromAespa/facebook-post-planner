@@ -87,6 +87,9 @@ interface PlannerApi {
     @GET("api/queue")
     suspend fun queue(): List<PostDto>
 
+    @GET("api/posts")
+    suspend fun allPosts(): List<PostDto>
+
     @GET("api/drafts")
     suspend fun drafts(): List<PostDto>
 
