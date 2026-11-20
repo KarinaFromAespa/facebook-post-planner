@@ -204,6 +204,7 @@ app.post('/api/pages/connect', async (req, res) => {
 
 app.delete('/api/pages/:id', (req, res) => {
   store.deletePage(req.params.id);
+  store.draftScheduledPostsForPage(req.params.id);
   res.json({ ok: true });
 });
 

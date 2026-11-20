@@ -61,4 +61,18 @@ module.exports = {
     state.pages = state.pages.filter((p) => p.id !== id);
     save(state);
   },
+  // When a Page is disconnected, its scheduled posts can never publish
+  // (no token). Move them to draft so they leave the queue instead of
+  // sitting there as scheduled forever; the user can re-schedule them
+  // from Drafts if the Page is re-connected. The planned time is kept.
+  draftScheduledPostsForPage: (pageId) => {
+    let changed = false;
+    for (const p of state.posts) {
+      if (p.pageId === pageId && p.status === 'scheduled') {
+        p.status = 'draft';
+        changed = true;
+      }
+    }
+    if (changed) save(state);
+  },
 };
