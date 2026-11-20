@@ -134,19 +134,27 @@ app.patch('/api/posts/:id', (req, res) => {
   if (status !== undefined && !['draft', 'scheduled'].includes(status)) {
     return res.status(400).json({ error: 'status must be draft or scheduled' });
   }
+  // Work out the new status/time FIRST and validate them before touching
+  // the post — the store hands out a reference to the live post, so a
+  // rejected PATCH that already mutated it would corrupt it even though
+  // it returns 400 (the draft would vanish and reappear as scheduled).
+  const nextStatus = status !== undefined ? status : post.status;
+  const nextScheduledAt = scheduledAt !== undefined ? (scheduledAt || null) : post.scheduledAt;
+  // A scheduled post needs a time; a draft may KEEP a planned time (the
+  // user picked it when creating the draft) — it just doesn't publish
+  // until the status becomes scheduled. A past time can't be scheduled.
+  const effectiveStatus = nextStatus === 'scheduled' && !nextScheduledAt ? 'draft' : nextStatus;
+  if (effectiveStatus === 'scheduled' && Date.parse(nextScheduledAt) < Date.now() + 2 * 60 * 1000) {
+    return res.status(400).json({ error: 'Pick a time at least 2 minutes ahead.' });
+  }
   if (type !== undefined) post.type = type;
   if (caption !== undefined) post.caption = caption.trim();
   if (hashtags !== undefined) post.hashtags = hashtags || null;
   if (scheduledAt !== undefined) post.scheduledAt = scheduledAt || null;
   if (pageId !== undefined) post.pageId = pageId || null;
   if (status !== undefined) post.status = status;
-  // A scheduled post needs a time; a draft may KEEP a planned time (the
-  // user picked it when creating the draft) — it just doesn't publish
-  // until the status becomes scheduled. A past time can't be scheduled.
   if (post.status === 'scheduled' && !post.scheduledAt) post.status = 'draft';
-  if (post.status === 'scheduled' && Date.parse(post.scheduledAt) < Date.now() + 2 * 60 * 1000) {
-    return res.status(400).json({ error: 'Pick a time at least 2 minutes ahead.' });
-  }
+  post.failureReason = null;
   post.failureReason = null;
   post.updatedAt = new Date().toISOString();
   store.upsertPost(post);
