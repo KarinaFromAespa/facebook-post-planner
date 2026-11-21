@@ -161,16 +161,34 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
      * Page keeps coming back every time the app opens, even after clearing
      * the app's data, because the list is fetched from the backend. Only
      * clears the local selection (and the Facebook session) when the
-     * removed Page was the selected one. */
+     * removed Page was the selected one. If it was, switch to the next
+     * remaining Page automatically, in list order, instead of leaving the
+     * scheduler with no Page while others are still connected. */
     fun removeBackendPage(id: String) = viewModelScope.launch {
         val removed = repo.removePage(id)
         if (!removed) {
             _error.value = "Could not remove the Page from the backend — check the backend URL below."
-        } else if (selectedPageId.value == id) {
+            refresh()
+            return@launch
+        }
+        val wasSelected = selectedPageId.value == id
+        if (wasSelected) {
             repo.setPage(null, null)
             LoginManager.getInstance().logOut()
         }
-        refresh()
+        _loading.value = true
+        _error.value = null
+        runCatching { repo.pages() }
+            .onSuccess { remaining ->
+                _pages.value = remaining
+                if (wasSelected) {
+                    remaining.firstOrNull { it.id != id }?.let { next ->
+                        repo.setPage(next.id, next.name)
+                    }
+                }
+            }
+            .onFailure { _error.value = "Could not reach the backend — check the backend URL below." }
+        _loading.value = false
     }
 
     fun saveBackendUrl(url: String) = viewModelScope.launch {
