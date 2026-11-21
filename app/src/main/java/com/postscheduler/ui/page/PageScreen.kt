@@ -63,6 +63,14 @@ fun PageScreen(
     var url by remember(backendUrl) { mutableStateOf(backendUrl) }
     val activity = LocalContext.current as Activity
     val hasConnectedPage = selectedId != null || pages.isNotEmpty()
+    // The Facebook picker lists Pages the account manages. Hide the ones
+    // already connected to the backend, otherwise a connected Page shows
+    // twice on this screen (once in the picker, once under Connected
+    // Pages) right after signing in, until navigating away clears the
+    // picker. The picker is for connecting *more* Pages, so it only
+    // lists Pages that are not connected yet.
+    val connectedIds = pages.map { it.id }.toSet()
+    val unconnectedFacebookPages = facebookPages.filter { it.id !in connectedIds }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
@@ -89,9 +97,9 @@ fun PageScreen(
             Spacer(Modifier.height(8.dp))
             Text(it, style = MaterialTheme.typography.bodySmall)
         }
-        if (facebookPages.isNotEmpty()) {
+        if (unconnectedFacebookPages.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            facebookPages.forEach { page ->
+            unconnectedFacebookPages.forEach { page ->
                 PageRow(
                     name = page.name,
                     id = page.id,

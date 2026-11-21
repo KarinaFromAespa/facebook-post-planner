@@ -90,7 +90,7 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
             TopAppBar(
                 title = {
                     Text(
-                        "Post Planner",
+                        "Post Scheduler",
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                     )
                 },
