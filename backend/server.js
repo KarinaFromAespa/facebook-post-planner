@@ -25,7 +25,7 @@ function toDto(p) {
 }
 
 function toPageDto(p) {
-  return { id: p.id, name: p.name, connectedAt: p.connectedAt || null };
+  return { id: p.id, name: p.name, connectedAt: p.connectedAt || null, pictureUrl: p.pictureUrl || null };
 }
 
 app.get('/health', (req, res) => res.json({
@@ -184,7 +184,7 @@ app.post('/api/queue/resume', (req, res) => res.json({ paused: store.setQueuePau
 app.get('/api/pages', (req, res) => res.json(store.allPages().map(toPageDto)));
 
 app.post('/api/pages/connect', async (req, res) => {
-  const { pageId, pageName, accessToken } = req.body || {};
+  const { pageId, pageName, accessToken, pictureUrl } = req.body || {};
   if (!pageId || typeof pageId !== 'string') return res.status(400).json({ error: 'pageId is required' });
   if (!accessToken || typeof accessToken !== 'string') return res.status(400).json({ error: 'accessToken is required' });
   try {
@@ -194,6 +194,7 @@ app.post('/api/pages/connect', async (req, res) => {
     const { token, longLived } = await facebook.exchangeLongLivedToken(accessToken);
     const page = store.upsertPage({
       id: pageId, name: pageName || pageId, accessToken: token,
+      pictureUrl: pictureUrl || null,
       longLived, connectedAt: new Date().toISOString(),
     });
     res.status(201).json({ ...toPageDto(page), longLived });
