@@ -1,6 +1,13 @@
+// Post media. The VM disk keeps a local copy as a serving cache —
+// Facebook keeps fetching from the backend's /uploads URL exactly as
+// before. The durable copies live in the Oracle bucket (primary) and the
+// Neon S3 bucket (DR), so a lost VM loses no media. On startup, any local
+// file that is missing is re-downloaded from the Oracle bucket.
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const mediaStore = require('./db/mediaStore');
 
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -25,10 +32,68 @@ function mediaFor(post) {
   }));
 }
 
+function objectNameFor(postId) {
+  return `${postId}/${crypto.randomUUID()}`;
+}
+
+// After multer saves a temp file, copy it to the Oracle bucket (primary)
+// and the Neon S3 bucket (DR), then return the mediaFiles entry. The local
+// file stays as the serving cache. Bucket uploads are best-effort: a
+// failed upload is logged and the local file still serves the post.
+async function addMedia(post, file) {
+  const objectName = objectNameFor(post.id);
+  const entry = {
+    path: file.path, filename: file.originalname, mimetype: file.mimetype,
+    objectName,
+  };
+  try {
+    await mediaStore.uploadToOracle(objectName, file.path, file.mimetype);
+  } catch (e) {
+    console.error('[media] Oracle bucket upload failed:', e.message);
+  }
+  if (mediaStore.neonConfigured()) {
+    try {
+      await mediaStore.uploadToNeon(objectName, file.path, file.mimetype);
+    } catch (e) {
+      console.error('[media] Neon S3 upload failed:', e.message);
+    }
+  }
+  return entry;
+}
+
 function deleteMedia(post) {
   for (const f of post.mediaFiles || []) {
     try { fs.unlinkSync(f.path); } catch { /* already gone */ }
+    if (f.objectName) {
+      mediaStore.deleteFromOracle(f.objectName).catch((e) => {
+        console.error('[media] Oracle bucket delete failed:', e.message);
+      });
+      if (mediaStore.neonConfigured()) {
+        mediaStore.deleteFromNeon(f.objectName).catch((e) => {
+          console.error('[media] Neon S3 delete failed:', e.message);
+        });
+      }
+    }
   }
 }
 
-module.exports = { upload, mediaFor, deleteMedia };
+// Re-download any local file that is missing (e.g. after the VM was
+// rebuilt) from the Oracle bucket, so /uploads keeps serving it.
+async function ensureLocalFiles(post) {
+  for (const f of post.mediaFiles || []) {
+    if (!f.objectName) continue;
+    try {
+      fs.accessSync(f.path, fs.constants.F_OK);
+    } catch {
+      try {
+        fs.mkdirSync(path.dirname(f.path), { recursive: true });
+        await mediaStore.downloadFromOracle(f.objectName, f.path);
+        console.log('[media] restored local file from Oracle bucket:', f.objectName);
+      } catch (e) {
+        console.error('[media] restore from Oracle bucket failed:', f.objectName, e.message);
+      }
+    }
+  }
+}
+
+module.exports = { upload, mediaFor, addMedia, deleteMedia, ensureLocalFiles };

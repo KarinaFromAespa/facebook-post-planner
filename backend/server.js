@@ -1,3 +1,4 @@
+require('dotenv').config();
 const crypto = require('crypto');
 const express = require('express');
 const path = require('path');
@@ -95,13 +96,12 @@ app.delete('/api/posts/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/posts/:id/media', media.upload.single('file'), (req, res) => {
+app.post('/api/posts/:id/media', media.upload.single('file'), async (req, res) => {
   const post = store.getPost(req.params.id);
   if (!post) return res.status(404).json({ error: 'not found' });
   if (!req.file) return res.status(400).json({ error: 'file is required' });
-  post.mediaFiles = [...(post.mediaFiles || []), {
-    path: req.file.path, filename: req.file.originalname, mimetype: req.file.mimetype,
-  }];
+  const entry = await media.addMedia(post, req.file);
+  post.mediaFiles = [...(post.mediaFiles || []), entry];
   post.updatedAt = new Date().toISOString();
   store.upsertPost(post);
   res.json(toDto(post));
@@ -230,8 +230,21 @@ app.get('/api/insights', async (req, res) => {
   res.json(await facebook.insights(req.query.pageId || null));
 });
 
-app.listen(PORT, () => {
-  console.log(`facebook-post-planner-backend listening on :${PORT}`);
-  console.log(`facebook configured: ${facebook.configured()}`);
-  publisher.start();
+async function start() {
+  await store.init();
+  // Restore any local media file that is missing (e.g. after a VM rebuild)
+  // from the Oracle bucket, so /uploads keeps serving it.
+  for (const post of store.allPosts()) {
+    await media.ensureLocalFiles(post);
+  }
+  app.listen(PORT, () => {
+    console.log(`facebook-post-planner-backend listening on :${PORT}`);
+    console.log(`facebook configured: ${facebook.configured()}`);
+    publisher.start();
+  });
+}
+
+start().catch((e) => {
+  console.error('backend failed to start:', e);
+  process.exit(1);
 });
