@@ -198,7 +198,6 @@ fun PageScreen(
     }
 }
 
-@Composable
 /**
  * A Page's profile picture, cached in memory only until the app closes.
  * The picture URL comes from /me/accounts (no extra API call) and the image
@@ -240,6 +239,7 @@ private fun PageAvatar(
     }
 }
 
+@Composable
 private fun PageRow(
     name: String,
     id: String,
