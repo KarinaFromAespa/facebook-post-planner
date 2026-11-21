@@ -279,11 +279,7 @@ class PlannerRepository(context: Context) {
         runCatching { api().queueState().paused }.getOrDefault(false)
 
     suspend fun refreshInsights(): InsightsDto? {
-        return runCatching { api().insights() }.onSuccess { dto ->
-            insightDao.upsertAll(dto.posts.map {
-                InsightEntity(it.postId, it.likes, it.comments, it.shares, it.views, it.earningsUsd)
-            })
-        }.getOrNull()
+        return runCatching { api().insights() }.getOrNull()
     }
 
     companion object {

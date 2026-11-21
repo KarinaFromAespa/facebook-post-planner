@@ -66,17 +66,7 @@ data class QueueStateDto(val paused: Boolean)
 data class InsightsDto(
     val monetized: Boolean,
     val monetizationCriteria: String?,
-    val totalEarningsUsd: Double?,
-    val posts: List<InsightDto>
-)
-data class InsightDto(
-    val postId: String,
-    val caption: String? = null,
-    val likes: Int,
-    val comments: Int,
-    val shares: Int,
-    val views: Int,
-    val earningsUsd: Double?
+    val totalEarningsUsd: Double?
 )
 
 interface PlannerApi {

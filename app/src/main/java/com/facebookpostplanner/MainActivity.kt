@@ -37,6 +37,7 @@ import com.facebook.CallbackManager
 import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.ui.create.CreateScreen
 import com.facebookpostplanner.ui.drafts.DraftsScreen
+import com.facebookpostplanner.ui.insights.InsightsScreen
 import com.facebookpostplanner.ui.page.PageScreen
 import com.facebookpostplanner.ui.publish.PublishScreen
 import com.facebookpostplanner.ui.theme.PlannerTheme
@@ -69,7 +70,8 @@ class MainActivity : ComponentActivity() {
 private enum class Tab(val route: String, val label: String) {
     CREATE("create", "Create"),
     PUBLISH("publish", "Publish"),
-    DRAFTS("drafts", "Drafts")
+    DRAFTS("drafts", "Drafts"),
+    INSIGHTS("insights", "Insights")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -108,7 +110,7 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
-                listOf(Tab.CREATE, Tab.PUBLISH, Tab.DRAFTS).forEach { tab ->
+                listOf(Tab.CREATE, Tab.PUBLISH, Tab.DRAFTS, Tab.INSIGHTS).forEach { tab ->
                     NavigationBarItem(
                         selected = currentTab == tab,
                         onClick = {
@@ -132,6 +134,7 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
                                 Tab.CREATE -> Icon(Icons.Default.Add, null)
                                 Tab.PUBLISH -> Icon(Icons.Default.CalendarMonth, null)
                                 Tab.DRAFTS -> Icon(Icons.Default.EditNote, null)
+                                Tab.INSIGHTS -> Icon(Icons.Default.BarChart, null)
                             }
                         },
                         label = { Text(tab.label) }
@@ -201,6 +204,7 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
                     }
                 )
             }
+            composable(Tab.INSIGHTS.route) { InsightsScreen() }
             composable("page") { PageScreen(callbackManager = fbCallbackManager) }
         }
     }
