@@ -41,6 +41,17 @@ async function graph(path, { params = {}, method = 'GET', token } = {}) {
   return data;
 }
 
+// A Page's profile picture URL, via the Page token. One Graph call, no
+// rate-limit concern (it is the picture field on the Page, not an insights
+// metric). Returns null when the picture cannot be read.
+async function pagePictureUrl(pageId, token) {
+  try {
+    const d = await graph(`/${pageId}`, { params: { fields: 'picture.type(large)' }, token });
+    const url = d.picture?.data?.url;
+    return (typeof url === 'string' && url) ? url : null;
+  } catch { return null; }
+}
+
 async function publishPost(post, mediaFiles) {
   const page = pageFor(post);
   if (!page) {
@@ -121,7 +132,12 @@ function earningsAmount(value) {
 // These are insights METRICS (Graph v23.0) on the /insights edge — not
 // Page fields. Reading them needs the read_insights permission on the Page
 // token; without it the edge returns empty data instead of an error.
-async function insights() {
+//
+// pageId selects which Page the total is for. Without it the first
+// connected Page is used. The app/website pass the currently selected
+// Page, so switching Pages shows that Page's earnings instead of the
+// first Page's.
+async function insights(pageId) {
   if (!configured()) {
     return {
       monetized: false,
@@ -129,7 +145,9 @@ async function insights() {
       totalEarningsUsd: null,
     };
   }
-  const first = store.allPages()[0];
+  const pages = store.allPages();
+  const found = pageId ? pages.find((p) => p.id === pageId) : null;
+  const first = found || pages[0];
   const page = first
     ? { id: first.id, token: first.accessToken }
     : { id: process.env.FB_PAGE_ID, token: process.env.FB_PAGE_TOKEN };
@@ -162,4 +180,4 @@ async function insights() {
   };
 }
 
-module.exports = { configured, publishPost, insights, exchangeLongLivedToken };
+module.exports = { configured, publishPost, insights, exchangeLongLivedToken, pagePictureUrl };

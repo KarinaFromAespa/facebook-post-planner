@@ -181,7 +181,19 @@ app.get('/api/queue/state', (req, res) => res.json({ paused: store.isQueuePaused
 app.post('/api/queue/pause', (req, res) => res.json({ paused: store.setQueuePaused(true) }));
 app.post('/api/queue/resume', (req, res) => res.json({ paused: store.setQueuePaused(false) }));
 
-app.get('/api/pages', (req, res) => res.json(store.allPages().map(toPageDto)));
+app.get('/api/pages', async (req, res) => {
+  const pages = store.allPages();
+  // Fill in a missing profile picture for pages connected before the
+  // picture was stored (e.g. connected with the old app/website build).
+  // One Graph call per page, once — after it is stored, no more fetches.
+  for (const p of pages) {
+    if (!p.pictureUrl && p.accessToken) {
+      const url = await facebook.pagePictureUrl(p.id, p.accessToken);
+      if (url) store.upsertPage({ ...p, pictureUrl: url });
+    }
+  }
+  res.json(store.allPages().map(toPageDto));
+});
 
 app.post('/api/pages/connect', async (req, res) => {
   const { pageId, pageName, accessToken, pictureUrl } = req.body || {};
@@ -192,9 +204,14 @@ app.post('/api/pages/connect', async (req, res) => {
     // (60 days) when FB_APP_ID + FB_APP_SECRET are set as backend env vars.
     // Without them the token is stored as-is and reported as short-lived.
     const { token, longLived } = await facebook.exchangeLongLivedToken(accessToken);
+    // The picture URL is fetched here when the client did not send one,
+    // so a Page always gets its picture even if it was connected from an
+    // older app/website build.
+    let url = pictureUrl || null;
+    if (!url) url = await facebook.pagePictureUrl(pageId, token);
     const page = store.upsertPage({
       id: pageId, name: pageName || pageId, accessToken: token,
-      pictureUrl: pictureUrl || null,
+      pictureUrl: url,
       longLived, connectedAt: new Date().toISOString(),
     });
     res.status(201).json({ ...toPageDto(page), longLived });
@@ -210,7 +227,7 @@ app.delete('/api/pages/:id', (req, res) => {
 });
 
 app.get('/api/insights', async (req, res) => {
-  res.json(await facebook.insights());
+  res.json(await facebook.insights(req.query.pageId || null));
 });
 
 app.listen(PORT, () => {
