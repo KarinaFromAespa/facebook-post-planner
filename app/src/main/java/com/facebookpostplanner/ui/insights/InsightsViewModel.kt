@@ -23,7 +23,10 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
     init { refresh() }
 
     fun refresh() = viewModelScope.launch {
-        val dto: InsightsDto? = runCatching { repo.refreshInsights() }.getOrNull()
+        // The earnings belong to the currently selected Page — pass its id
+        // so switching Pages shows that Page's total instead of the first
+        // connected Page's.
+        val dto: InsightsDto? = runCatching { repo.refreshInsights(repo.currentPageId()) }.getOrNull()
         dto?.let {
             _monetized.value = it.monetized
             _criteria.value = it.monetizationCriteria

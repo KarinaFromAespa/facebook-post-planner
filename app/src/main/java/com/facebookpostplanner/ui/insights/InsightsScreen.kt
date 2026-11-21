@@ -19,6 +19,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -39,6 +40,10 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
     val monetized by vm.monetized.collectAsState()
     val criteria by vm.criteria.collectAsState()
     val totalEarnings by vm.totalEarnings.collectAsState()
+
+    // Re-fetch every time the tab is opened, so switching Pages shows the
+    // newly selected Page's earnings instead of a stale total.
+    LaunchedEffect(Unit) { vm.refresh() }
 
     Column(
         Modifier.fillMaxSize().padding(16.dp),

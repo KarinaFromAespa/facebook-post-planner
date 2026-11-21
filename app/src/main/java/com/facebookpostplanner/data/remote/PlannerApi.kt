@@ -12,6 +12,7 @@ import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 data class PostDto(
     val id: String,
@@ -117,7 +118,7 @@ interface PlannerApi {
     suspend fun resumeQueue(): QueueStateDto
 
     @GET("api/insights")
-    suspend fun insights(): InsightsDto
+    suspend fun insights(@Query("pageId") pageId: String? = null): InsightsDto
 }
 
 fun PostType.toApi(): String = name.lowercase()

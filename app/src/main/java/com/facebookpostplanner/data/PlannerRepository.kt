@@ -278,8 +278,8 @@ class PlannerRepository(context: Context) {
     suspend fun queuePaused(): Boolean =
         runCatching { api().queueState().paused }.getOrDefault(false)
 
-    suspend fun refreshInsights(): InsightsDto? {
-        return runCatching { api().insights() }.getOrNull()
+    suspend fun refreshInsights(pageId: String? = null): InsightsDto? {
+        return runCatching { api().insights(pageId) }.getOrNull()
     }
 
     companion object {
