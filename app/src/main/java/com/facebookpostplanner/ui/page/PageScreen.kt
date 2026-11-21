@@ -17,8 +17,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,7 +55,6 @@ fun PageScreen(
     val loading by vm.loading.collectAsState()
     val error by vm.error.collectAsState()
     val selectedId by vm.selectedPageId.collectAsState()
-    val selectedName by vm.selectedPageName.collectAsState()
     val backendUrl by vm.backendUrl.collectAsState()
     val facebookPages by vm.facebookPages.collectAsState()
     val fbStatus by vm.fbStatus.collectAsState()
@@ -66,55 +63,12 @@ fun PageScreen(
     var url by remember(backendUrl) { mutableStateOf(backendUrl) }
     val activity = LocalContext.current as Activity
     val hasConnectedPage = selectedId != null || pages.isNotEmpty()
-    val selectedPictureUrl = pages.firstOrNull { it.id == selectedId }?.pictureUrl
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
     ) {
         Text("Connect Page", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(16.dp))
-
-        Card(
-            Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                PageAvatar(
-                    pictureUrl = selectedPictureUrl,
-                    name = selectedName ?: selectedId ?: "?",
-                    size = 40.dp
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Posting to", style = MaterialTheme.typography.labelMedium)
-                    if (selectedId != null) {
-                        Text(
-                            selectedName ?: selectedId!!,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            "Page ID: $selectedId",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Text("No Page connected yet.")
-                    }
-                }
-                if (selectedId != null) {
-                    OutlinedButton(onClick = { vm.disconnect() }) { Text("Disconnect") }
-                }
-            }
-        }
-        Spacer(Modifier.height(20.dp))
 
         Text(if (hasConnectedPage) "Connect more pages" else "Connect with Facebook", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(6.dp))
@@ -221,10 +175,9 @@ private fun PageRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        // Remove this Page from the backend. Without it, a backend Page
-        // can only be removed by selecting it first and using Disconnect
-        // — and after clearing the app's data there is no selected Page
-        // at all, so the backend Pages just keep coming back.
+        // Remove this Page from the backend. Without it a backend Page
+        // keeps coming back every time the app opens, even after clearing
+        // the app's data, because the list is fetched from the backend.
         if (onRemove != null) {
             IconButton(onClick = onRemove) {
                 Icon(

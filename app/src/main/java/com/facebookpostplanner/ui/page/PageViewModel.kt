@@ -156,29 +156,12 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
         repo.setPage(page.id, page.name)
     }
 
-    fun disconnect() = viewModelScope.launch {
-        val id = selectedPageId.value
-        if (id != null) {
-            runCatching { repo.disconnectPage(id) }
-        } else {
-            repo.setPage(null, null)
-        }
-        // Clear the Facebook session so the next login actually prompts
-        // and can grant the new permissions (e.g. read_insights). Without
-        // this, LoginManager just returns the old token and the user can
-        // never pick up the new scopes — it feels like the page cannot be
-        // disconnected at all.
-        LoginManager.getInstance().logOut()
-        refresh()
-    }
-
     /** Remove one Page from the backend, from the "Connected Pages"
-     * list. The Disconnect button only removes the currently selected
-     * Page, so without this there is no way to delete a backend Page
-     * that is not selected — it keeps coming back every time the app
-     * opens, even after clearing the app's data, because the list is
-     * fetched from the backend. Only clears the local selection (and the
-     * Facebook session) when the removed Page was the selected one. */
+     * list. This is the only way to delete a backend Page — without it a
+     * Page keeps coming back every time the app opens, even after clearing
+     * the app's data, because the list is fetched from the backend. Only
+     * clears the local selection (and the Facebook session) when the
+     * removed Page was the selected one. */
     fun removeBackendPage(id: String) = viewModelScope.launch {
         val removed = repo.removePage(id)
         if (!removed) {
