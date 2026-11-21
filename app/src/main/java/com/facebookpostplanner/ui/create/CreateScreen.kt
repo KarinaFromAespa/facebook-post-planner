@@ -203,7 +203,7 @@ fun CreateScreen(
                         fontWeight = FontWeight.Medium
                     )
                 }
-                // Change opens a dropdown listing the connected Pages so
+                // Switch opens a dropdown listing the connected Pages so
                 // switching is one tap, no trip to the Page screen. With no
                 // Page connected there is nothing to pick from, so it goes
                 // to the Page screen to connect one instead.
@@ -216,7 +216,7 @@ fun CreateScreen(
                             pageMenuExpanded = true
                         }
                     }) {
-                        Text(if (pageName == null) "Connect" else "Change")
+                        Text(if (pageName == null) "Connect" else "Switch")
                     }
                     DropdownMenu(
                         expanded = pageMenuExpanded,
