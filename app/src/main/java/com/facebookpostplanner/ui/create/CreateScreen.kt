@@ -3,6 +3,7 @@ package com.facebookpostplanner.ui.create
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
@@ -24,7 +26,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -85,6 +90,9 @@ fun CreateScreen(
     val done by vm.done.collectAsState()
     val pageName by vm.pageName.collectAsState()
     val pagePictureUrl by vm.pagePictureUrl.collectAsState()
+    val pages by vm.pages.collectAsState()
+    val selectedPageId by vm.selectedPageId.collectAsState()
+    var pageMenuExpanded by remember { mutableStateOf(false) }
 
     var caption by remember { mutableStateOf(editPost?.caption ?: "") }
     var hashtags by remember { mutableStateOf(editPost?.hashtags ?: "") }
@@ -195,8 +203,58 @@ fun CreateScreen(
                         fontWeight = FontWeight.Medium
                     )
                 }
-                TextButton(onClick = onConnectPage) {
-                    Text(if (pageName == null) "Connect" else "Change")
+                // Change opens a dropdown listing the connected Pages so
+                // switching is one tap, no trip to the Page screen. With no
+                // Page connected there is nothing to pick from, so it goes
+                // to the Page screen to connect one instead.
+                Box {
+                    TextButton(onClick = {
+                        if (pageName == null || pages.isEmpty()) {
+                            onConnectPage()
+                        } else {
+                            vm.refreshPages()
+                            pageMenuExpanded = true
+                        }
+                    }) {
+                        Text(if (pageName == null) "Connect" else "Change")
+                    }
+                    DropdownMenu(
+                        expanded = pageMenuExpanded,
+                        onDismissRequest = { pageMenuExpanded = false }
+                    ) {
+                        pages.forEach { page ->
+                            DropdownMenuItem(
+                                text = { Text(page.name) },
+                                leadingIcon = {
+                                    PageAvatar(
+                                        pictureUrl = page.pictureUrl,
+                                        name = page.name,
+                                        size = 24.dp
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (page.id == selectedPageId) {
+                                        Icon(
+                                            Icons.Filled.Check,
+                                            contentDescription = "Selected"
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    vm.selectPage(page)
+                                    pageMenuExpanded = false
+                                }
+                            )
+                        }
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Connect more pages…") },
+                            onClick = {
+                                pageMenuExpanded = false
+                                onConnectPage()
+                            }
+                        )
+                    }
                 }
             }
         }

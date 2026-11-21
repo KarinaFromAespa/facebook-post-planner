@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.facebookpostplanner.data.PlannerRepository
 import com.facebookpostplanner.data.local.PostType
+import com.facebookpostplanner.data.remote.PageDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,26 @@ class CreateViewModel(app: Application) : AndroidViewModel(app) {
     val pageName: StateFlow<String?> =
         repo.selectedPageName.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    val selectedPageId: StateFlow<String?> =
+        repo.selectedPageId.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    // The Pages the backend knows about, for the Change dropdown. Refreshed
+    // whenever the selected Page changes and whenever the dropdown opens,
+    // so a Page connected from the Page screen shows up right away.
+    private val _pages = MutableStateFlow<List<PageDto>>(emptyList())
+    val pages: StateFlow<List<PageDto>> = _pages.asStateFlow()
+
+    fun refreshPages() = viewModelScope.launch {
+        _pages.value = runCatching { repo.pages() }.getOrDefault(emptyList())
+    }
+
+    // Switch the selected Page (local choice only — the Page's token is
+    // already on the backend from when it was connected). The picture and
+    // name follow automatically via the selectedPageId collector below.
+    fun selectPage(page: PageDto) = viewModelScope.launch {
+        repo.setPage(page.id, page.name)
+    }
+
     // The selected Page's profile picture URL, from the backend pages list.
     // Refreshed whenever the selected Page changes, so the Create tab's
     // avatar follows a page switch (the backend fills in a missing picture
@@ -30,8 +51,9 @@ class CreateViewModel(app: Application) : AndroidViewModel(app) {
     init {
         viewModelScope.launch {
             repo.selectedPageId.collect { id ->
-                _pagePictureUrl.value = runCatching { repo.pages() }.getOrNull()
-                    ?.firstOrNull { it.id == id }?.pictureUrl
+                val list = runCatching { repo.pages() }.getOrDefault(emptyList())
+                _pages.value = list
+                _pagePictureUrl.value = list.firstOrNull { it.id == id }?.pictureUrl
             }
         }
     }
