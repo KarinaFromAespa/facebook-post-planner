@@ -114,13 +114,19 @@ function earningsAmount(value) {
   return 0;
 }
 
-async function insights(publishedPosts) {
+// Total approx earnings for the current calendar month, nothing else.
+// Just 2 Graph API calls (the two monetization metrics on the /insights
+// edge) — no per-post reads, no shares/likes/comments. The total is NOT
+// intertwined with the per-post data, so this costs almost no rate limit.
+// These are insights METRICS (Graph v23.0) on the /insights edge — not
+// Page fields. Reading them needs the read_insights permission on the Page
+// token; without it the edge returns empty data instead of an error.
+async function insights() {
   if (!configured()) {
     return {
       monetized: false,
-      monetizationCriteria: 'Not enrolled in Content Monetization. Check Meta Business Suite > Monetization > View Page eligibility. Earnings show here once the Page is enrolled; engagement ranking still shows below.',
+      monetizationCriteria: 'Not enrolled in Content Monetization. Check Meta Business Suite > Monetization > View Page eligibility. Earnings show here once the Page is enrolled.',
       totalEarningsUsd: null,
-      posts: [],
     };
   }
   const first = store.allPages()[0];
@@ -128,15 +134,10 @@ async function insights(publishedPosts) {
     ? { id: first.id, token: first.accessToken }
     : { id: process.env.FB_PAGE_ID, token: process.env.FB_PAGE_TOKEN };
 
-  // Page monetization total (last 30 days). These are insights METRICS
-  // (Graph v23.0) on the /insights edge — not Page fields. The old code
-  // asked for them as Page fields, which do not exist, so the call always
-  // failed and every page read as "not monetized". Reading them needs the
-  // read_insights permission on the Page token; without it the edge returns
-  // empty data instead of an error.
   let total = null;
   let monetized = false;
-  const since = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
+  const now = new Date();
+  const since = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000);
   const until = Math.floor(Date.now() / 1000);
   for (const metric of ['content_monetization_earnings', 'monetization_approximate_earnings']) {
     try {
@@ -152,57 +153,12 @@ async function insights(publishedPosts) {
     } catch { /* try the other metric */ }
   }
   if (monetized) total = total ?? 0;
-
-  // Per-post details. The page's real recent posts (so Insights has
-  // something even before anything is published through the planner) plus
-  // any posts the planner published. Each field is best-effort so one
-  // blocked read does not drop the whole post.
-  const posts = [];
-  const seen = new Set();
-  const addPost = async (facebookPostId, caption) => {
-    if (!facebookPostId || seen.has(facebookPostId)) return;
-    seen.add(facebookPostId);
-    const row = { postId: facebookPostId, caption: caption || '', likes: 0, comments: 0, shares: 0, views: 0, earningsUsd: null };
-    try {
-      const d = await graph(`/${facebookPostId}`, { params: { fields: 'shares' }, token: page.token });
-      row.shares = d.shares?.count ?? 0;
-    } catch {}
-    try {
-      const d = await graph(`/${facebookPostId}`, { params: { fields: 'likes.summary(true)' }, token: page.token });
-      row.likes = d.likes?.summary?.total_count ?? 0;
-    } catch {}
-    try {
-      const d = await graph(`/${facebookPostId}`, { params: { fields: 'comments.summary(true)' }, token: page.token });
-      row.comments = d.comments?.summary?.total_count ?? 0;
-    } catch {}
-    try {
-      const res = await graph(`/${facebookPostId}/insights`, {
-        params: { metric: 'content_monetization_earnings', period: 'lifetime' },
-        token: page.token,
-      });
-      const v = res.data?.[0]?.values?.[0]?.value;
-      if (v != null) row.earningsUsd = earningsAmount(v);
-    } catch {}
-    posts.push(row);
-  };
-  for (const post of publishedPosts) {
-    await addPost(post.facebookPostId, post.caption || '');
-  }
-  try {
-    const feed = await graph(`/${page.id}/posts`, {
-      params: { fields: 'id,message,created_time', limit: 10 },
-      token: page.token,
-    });
-    for (const p of feed.data || []) await addPost(p.id, p.message || '');
-  } catch { /* no recent posts to show */ }
-  posts.sort((a, b) => (b.likes + b.comments + b.shares) - (a.likes + a.comments + a.shares));
   return {
     monetized,
     monetizationCriteria: monetized
       ? null
-      : 'No Content Monetization earnings found in the last 30 days. If the Page is enrolled, check that the Page token has the read_insights permission (re-connect the Page after adding it) and see Meta Business Suite > Monetization > View Page eligibility.',
+      : 'No Content Monetization earnings found this month. If the Page is enrolled, check that the Page token has the read_insights permission (re-connect the Page after adding it) and see Meta Business Suite > Monetization > View Page eligibility.',
     totalEarningsUsd: total,
-    posts,
   };
 }
 

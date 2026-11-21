@@ -210,8 +210,7 @@ app.delete('/api/pages/:id', (req, res) => {
 });
 
 app.get('/api/insights', async (req, res) => {
-  const published = store.allPosts().filter((p) => p.status === 'published');
-  res.json(await facebook.insights(published));
+  res.json(await facebook.insights());
 });
 
 app.listen(PORT, () => {
