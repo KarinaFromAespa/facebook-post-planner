@@ -41,6 +41,15 @@ async function graph(path, { params = {}, method = 'GET', token } = {}) {
   return data;
 }
 
+// Revoke a Page access token at Facebook: DELETE /{page-id}/permissions
+// with the Page token removes every permission the Page granted to the
+// app, which invalidates the token so it can never publish again. Used
+// when a Page is disconnected. Best-effort — the caller still removes the
+// Page locally even if this fails (e.g. the token already expired).
+async function revokePageToken(pageId, token) {
+  await graph(`/${pageId}/permissions`, { method: 'DELETE', token });
+}
+
 // A Page's profile picture URL, via the Page token. One Graph call, no
 // rate-limit concern (it is the picture field on the Page, not an insights
 // metric). Returns null when the picture cannot be read.
@@ -180,4 +189,4 @@ async function insights(pageId) {
   };
 }
 
-module.exports = { configured, publishPost, insights, exchangeLongLivedToken, pagePictureUrl };
+module.exports = { configured, publishPost, insights, exchangeLongLivedToken, pagePictureUrl, revokePageToken };

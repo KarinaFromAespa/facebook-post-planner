@@ -220,7 +220,15 @@ app.post('/api/pages/connect', async (req, res) => {
   }
 });
 
-app.delete('/api/pages/:id', (req, res) => {
+app.delete('/api/pages/:id', async (req, res) => {
+  // Destroy the Page access token at Facebook first, so it can never
+  // publish again — just deleting our copy would leave a live token
+  // behind. Best-effort: the Page is removed locally even if the revoke
+  // fails (e.g. the token already expired).
+  const page = store.getPage(req.params.id);
+  if (page && page.accessToken) {
+    try { await facebook.revokePageToken(page.id, page.accessToken); } catch (e) { console.error('[pages] revoke token failed:', e.message); }
+  }
   store.deletePage(req.params.id);
   store.draftScheduledPostsForPage(req.params.id);
   res.json({ ok: true });
