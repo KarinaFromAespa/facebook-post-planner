@@ -20,6 +20,22 @@ class CreateViewModel(app: Application) : AndroidViewModel(app) {
     val pageName: StateFlow<String?> =
         repo.selectedPageName.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    // The selected Page's profile picture URL, from the backend pages list.
+    // Refreshed whenever the selected Page changes, so the Create tab's
+    // avatar follows a page switch (the backend fills in a missing picture
+    // automatically, so even pages connected with an older build get one).
+    private val _pagePictureUrl = MutableStateFlow<String?>(null)
+    val pagePictureUrl: StateFlow<String?> = _pagePictureUrl.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            repo.selectedPageId.collect { id ->
+                _pagePictureUrl.value = runCatching { repo.pages() }.getOrNull()
+                    ?.firstOrNull { it.id == id }?.pictureUrl
+            }
+        }
+    }
+
     private val _type = MutableStateFlow(PostType.POST)
     val type: StateFlow<PostType> = _type.asStateFlow()
     private val _saving = MutableStateFlow(false)

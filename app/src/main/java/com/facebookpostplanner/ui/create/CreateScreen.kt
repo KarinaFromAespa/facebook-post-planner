@@ -3,8 +3,6 @@ package com.facebookpostplanner.ui.create
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -59,6 +56,7 @@ import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.data.local.PostType
 import com.facebookpostplanner.ui.components.KeepTimeInFuture
 import com.facebookpostplanner.ui.components.MediaRow
+import com.facebookpostplanner.ui.components.PageAvatar
 import com.facebookpostplanner.ui.components.todayOrLaterDates
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -86,6 +84,7 @@ fun CreateScreen(
     val error by vm.error.collectAsState()
     val done by vm.done.collectAsState()
     val pageName by vm.pageName.collectAsState()
+    val pagePictureUrl by vm.pagePictureUrl.collectAsState()
 
     var caption by remember { mutableStateOf(editPost?.caption ?: "") }
     var hashtags by remember { mutableStateOf(editPost?.hashtags ?: "") }
@@ -182,19 +181,11 @@ fun CreateScreen(
                 Modifier.fillMaxWidth().padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    Modifier.size(40.dp).background(
-                        MaterialTheme.colorScheme.primary, CircleShape
-                    ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        (pageName?.firstOrNull() ?: '?').toString(),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
+                PageAvatar(
+                    pictureUrl = pagePictureUrl,
+                    name = pageName ?: "",
+                    size = 40.dp
+                )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Posting to", style = MaterialTheme.typography.labelMedium)
