@@ -1,10 +1,10 @@
-# Facebook Post Planner — Android app (Kotlin + Jetpack Compose)
+# Post Scheduler — Android app (Kotlin + Jetpack Compose)
 
 V1, locked 2026-11-20. This is the `app/` side of the monorepo
-`KarinaFromAespa/facebook-post-planner`. Copy this whole `app/` folder
+`KarinaFromAespa/post-scheduler`. Copy this whole `app/` folder
 (plus the root `settings.gradle.kts`, `build.gradle.kts`,
 `gradle.properties`, `gradle/libs.versions.toml`) into
-`D:\Test\facebook-post-planner\`, next to `backend/`.
+`D:\Test\post-scheduler\`, next to `backend/`.
 
 ## What it does
 - **Publish tab (home):** Today list, hourly slots 08:00–18:00, one card
@@ -39,7 +39,7 @@ V1, locked 2026-11-20. This is the `app/` side of the monorepo
   reaches the composer — no custom cropper is shipped.
 
 ## Build (on your PC, Android Studio in D:\Programs\Android)
-1. Open `D:\Test\facebook-post-planner` in Android Studio.
+1. Open `D:\Test\post-scheduler` in Android Studio.
 2. Sync Gradle, then Run on a device / emulator (minSdk 26).
 3. Start the backend first (`backend/` — Node), or the app will show
    'Backend unreachable' and work from the local queue only.
@@ -47,15 +47,15 @@ V1, locked 2026-11-20. This is the `app/` side of the monorepo
 ## Files
 - `app/build.gradle.kts` — Compose BOM, Room, Retrofit, Coil, DataStore, WorkManager
 - `app/src/main/AndroidManifest.xml`
-- `app/src/main/java/com/facebookpostplanner/MainActivity.kt` — nav (Create / Publish / Insights)
-- `app/src/main/java/com/facebookpostplanner/data/local/` — Room: `Post`, `PostDao`, `AppDatabase`, `InsightEntity`
-- `app/src/main/java/com/facebookpostplanner/data/remote/` — Retrofit `PlannerApi`, `ApiFactory` + `SettingsStore`
-- `app/src/main/java/com/facebookpostplanner/data/PlannerRepository.kt` — local-first queue/drafts/publish/pause/insights
-- `app/src/main/java/com/facebookpostplanner/ui/publish/` — Today list + hourly slots
-- `app/src/main/java/com/facebookpostplanner/ui/create/` — composer
-- `app/src/main/java/com/facebookpostplanner/ui/insights/` — earnings-first insights
-- `app/src/main/java/com/facebookpostplanner/ui/components/PostCard.kt`
-- `app/src/main/java/com/facebookpostplanner/ui/theme/Theme.kt`
+- `app/src/main/java/com/postscheduler/MainActivity.kt` — nav (Create / Publish / Insights)
+- `app/src/main/java/com/postscheduler/data/local/` — Room: `Post`, `PostDao`, `AppDatabase`, `InsightEntity`
+- `app/src/main/java/com/postscheduler/data/remote/` — Retrofit `PlannerApi`, `ApiFactory` + `SettingsStore`
+- `app/src/main/java/com/postscheduler/data/PlannerRepository.kt` — local-first queue/drafts/publish/pause/insights
+- `app/src/main/java/com/postscheduler/ui/publish/` — Today list + hourly slots
+- `app/src/main/java/com/postscheduler/ui/create/` — composer
+- `app/src/main/java/com/postscheduler/ui/insights/` — earnings-first insights
+- `app/src/main/java/com/postscheduler/ui/components/PostCard.kt`
+- `app/src/main/java/com/postscheduler/ui/theme/Theme.kt`
 
 ## Not yet wired (needs your side)
 - Facebook Page token / developer setup — the backend needs it before

@@ -1,0 +1,310 @@
+package com.postscheduler.data
+
+import android.content.Context
+import android.net.Uri
+import com.postscheduler.data.local.AppDatabase
+import com.postscheduler.data.local.InsightEntity
+import com.postscheduler.data.local.Post
+import com.postscheduler.data.local.PostStatus
+import com.postscheduler.data.local.PostType
+import com.postscheduler.data.remote.ApiFactory
+import com.postscheduler.data.remote.CreatePostRequest
+import com.postscheduler.data.remote.InsightsDto
+import com.postscheduler.data.remote.PlannerApi
+import com.postscheduler.data.remote.toApi
+import kotlinx.coroutines.flow.Flow
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import java.util.UUID
+
+/**
+ * Local-first repository. The queue/drafts live in Room so the Today list
+ * works offline; every create / publish-now / pause also goes to the backend,
+ * which owns the 1-minute publisher and Object Storage.
+ * If the backend is unreachable, the local copy is kept and the error is
+ * surfaced to the UI — nothing is silently dropped.
+ */
+class PlannerRepository(context: Context) {
+    private val db = AppDatabase.get(context.applicationContext)
+    private val dao = db.postDao()
+    private val insightDao = db.insightDao()
+    private val settings = com.postscheduler.data.remote.SettingsStore(context.applicationContext)
+    private val appContext = context.applicationContext
+
+    fun queue(): Flow<List<Post>> = dao.queue()
+    fun drafts(): Flow<List<Post>> = dao.drafts()
+    fun published(): Flow<List<Post>> = dao.published()
+    fun insights(): Flow<List<InsightEntity>> = insightDao.all()
+
+    private fun api(): PlannerApi = ApiFactory.create(settings.currentBackendUrl())
+
+    val selectedPageId: Flow<String?> = settings.pageId
+    val selectedPageName: Flow<String?> = settings.pageName
+    fun currentPageId(): String? = settings.currentPageId()
+    fun currentPageName(): String? = settings.currentPageName()
+    suspend fun setPage(id: String?, name: String?) = settings.setPage(id, name)
+
+    /** Pages the backend knows about (from the Page token it holds). Empty when the backend is unreachable or has no Page configured yet. */
+    suspend fun pages(): List<com.postscheduler.data.remote.PageDto> =
+        runCatching { api().pages() }.getOrDefault(emptyList())
+
+    /**
+     * Hands a Facebook-Login Page token to the backend so it can publish as
+     * that Page. Always saves the choice locally; returns true only if the
+     * backend accepted the token (its POST /api/pages/connect may not exist
+     * yet — then posts save locally and the token stays on the phone).
+     */
+    suspend fun connectPage(id: String, name: String, accessToken: String, pictureUrl: String? = null): Boolean {
+        val stored = runCatching {
+            api().connectPage(com.postscheduler.data.remote.ConnectPageRequest(id, name, accessToken, pictureUrl))
+        }.isSuccess
+        setPage(id, name)
+        return stored
+    }
+
+    /** Remove a Page from the backend (and clear it locally). The backend
+     * also moves that Page's scheduled posts to draft so they leave the
+     * queue instead of sitting there as scheduled forever. Best-effort:
+     * the local page is cleared even if the backend is unreachable. */
+    /** Remove one Page from the backend only, without touching the local
+     * selection. Used to delete a Page listed under "Connected Pages"
+     * that is not the currently selected one — clearing the local Page
+     * there would wrongly deselect the Page the user is posting to. */
+    suspend fun removePage(id: String): Boolean =
+        runCatching { api().deletePage(id) }.isSuccess
+
+    suspend fun setBackendUrl(url: String) = settings.setBackendUrl(url)
+    fun backendUrl(): Flow<String> = settings.backendUrl
+
+    suspend fun refreshQueue() {
+        // Sync every post, not just the queue. /api/queue only returns
+        // scheduled posts, so once the backend published one it dropped
+        // out of the response and Room kept it SCHEDULED forever — it
+        // stayed on the Publish tab as a ghost long after it went out.
+        // /api/posts returns all statuses, so published posts become
+        // PUBLISHED (and leave the queue) and failed ones become FAILED
+        // (and keep their Retry). Fall back to /api/queue if the backend
+        // does not have /api/posts yet.
+        val dtos = runCatching { api().allPosts() }
+            .getOrElse { runCatching { api().queue() }.getOrNull() } ?: return
+        dtos.forEach { dto ->
+            // A post created in the app first lives under a random local
+            // id; the backend pull keys it by the backend id. Drop the
+            // stale local row first, or the same post shows twice.
+            dao.deleteDuplicatesForBackendId(dto.id)
+            dao.upsert(dto.toLocal())
+        }
+    }
+
+    suspend fun createPost(
+        type: PostType,
+        caption: String,
+        hashtags: String,
+        mediaUris: List<Uri>,
+        scheduledAtMillis: Long?,
+        publishNow: Boolean,
+        saveAsDraft: Boolean = false
+    ): Post {
+        val post = Post(
+            id = UUID.randomUUID().toString(),
+            type = type,
+            caption = caption.trim(),
+            hashtags = hashtags.trim(),
+            mediaUris = mediaUris.joinToString(",") { it.toString() },
+            mediaKind = if (type == PostType.REEL) "video" else if (mediaUris.isNotEmpty()) "photo" else "",
+            // A draft keeps its planned time (if one was picked) — it just
+            // doesn't publish until it is scheduled.
+            scheduledAtMillis = scheduledAtMillis,
+            status = when {
+                publishNow -> PostStatus.PUBLISHING
+                saveAsDraft || scheduledAtMillis == null -> PostStatus.DRAFT
+                else -> PostStatus.SCHEDULED
+            }
+        )
+        dao.upsert(post)
+        // Best-effort backend sync; local copy stays even if this fails.
+        runCatching {
+            val dto = api().createPost(
+                CreatePostRequest(
+                    type = type.toApi(), caption = post.caption,
+                    hashtags = post.hashtags.ifBlank { null },
+                    scheduledAt = scheduledAtMillis?.let { iso(it) },
+                    status = post.status.toApi(), publishNow = publishNow,
+                    pageId = currentPageId()
+                )
+            )
+            // Re-key the local row by the backend id (dropping the random
+            // local-UUID row), so a later backend pull updates this same row
+            // instead of adding a second copy of the post.
+            dao.delete(post.id)
+            dao.upsert(post.copy(id = dto.id, backendId = dto.id))
+            // Upload media files one by one; backend stores them in Object Storage.
+            mediaUris.forEach { uri ->
+                runCatching { uploadMedia(dto.id, uri) }
+            }
+            if (publishNow) {
+                runCatching { api().publishNow(dto.id) }
+            }
+        }.onFailure { e ->
+            dao.upsert(post.copy(status = PostStatus.FAILED, failureReason = e.message))
+            throw e
+        }
+        return post
+    }
+
+    /**
+     * Edit a scheduled post or draft: change its time/date, caption,
+     * hashtags or photos. PATCHes the same backend post (so its place in
+     * the queue and its id are kept) and updates the local copy. New photos
+     * replace the old ones; no new photos means the old ones stay.
+     */
+    suspend fun updatePost(
+        post: Post,
+        type: PostType,
+        caption: String,
+        hashtags: String,
+        mediaUris: List<Uri>,
+        scheduledAtMillis: Long?,
+        saveAsDraft: Boolean = false
+    ): Post {
+        val updated = post.copy(
+            type = type,
+            caption = caption.trim(),
+            hashtags = hashtags.trim(),
+            mediaUris = if (mediaUris.isNotEmpty()) mediaUris.joinToString(",") { it.toString() } else post.mediaUris,
+            mediaKind = if (type == PostType.REEL) "video" else if (mediaUris.isNotEmpty()) "photo" else post.mediaKind,
+            scheduledAtMillis = scheduledAtMillis,
+            status = if (saveAsDraft || scheduledAtMillis == null) PostStatus.DRAFT else PostStatus.SCHEDULED,
+            failureReason = null,
+            updatedAtMillis = System.currentTimeMillis()
+        )
+        dao.upsert(updated)
+        runCatching {
+            val backendId = post.backendId ?: post.id
+            api().updatePost(
+                backendId,
+                com.postscheduler.data.remote.UpdatePostRequest(
+                    type = type.toApi(), caption = updated.caption,
+                    hashtags = updated.hashtags.ifBlank { null },
+                    scheduledAt = scheduledAtMillis?.let { iso(it) },
+                    status = updated.status.toApi(), pageId = currentPageId()
+                )
+            )
+            if (mediaUris.isNotEmpty()) {
+                runCatching { api().clearMedia(backendId) }
+                mediaUris.forEach { uri ->
+                    runCatching { uploadMedia(backendId, uri) }
+                }
+            }
+        }.onFailure { e ->
+            dao.upsert(updated.copy(status = PostStatus.FAILED, failureReason = e.message))
+            throw e
+        }
+        return updated
+    }
+
+    /** Change only the scheduled time of a scheduled post (the Publish
+     * tab's "Update schedule" action). Type, caption, hashtags and photos
+     * are left alone. The backend rejects a time less than 2 minutes ahead,
+     * so the caller must validate the time first. */
+    suspend fun updateSchedule(post: Post, scheduledAtMillis: Long): Post {
+        val updated = post.copy(
+            scheduledAtMillis = scheduledAtMillis,
+            status = PostStatus.SCHEDULED,
+            failureReason = null,
+            updatedAtMillis = System.currentTimeMillis()
+        )
+        dao.upsert(updated)
+        runCatching {
+            val backendId = post.backendId ?: post.id
+            api().updatePost(
+                backendId,
+                com.postscheduler.data.remote.UpdatePostRequest(
+                    scheduledAt = iso(scheduledAtMillis),
+                    status = "scheduled"
+                )
+            )
+        }.onFailure { e ->
+            dao.upsert(updated.copy(status = PostStatus.FAILED, failureReason = e.message))
+            throw e
+        }
+        return updated
+    }
+
+    private suspend fun uploadMedia(backendId: String, uri: Uri) {
+        val file = File(appContext.cacheDir, "upload-${UUID.randomUUID()}")
+        appContext.contentResolver.openInputStream(uri)?.use { input ->
+            file.outputStream().use { input.copyTo(it) }
+        }
+        val body = file.asRequestBody("application/octet-stream".toMediaTypeOrNull())
+        val part = MultipartBody.Part.createFormData("file", file.name, body)
+        api().uploadMedia(backendId, part)
+        file.delete()
+    }
+
+    suspend fun publishNow(post: Post) {
+        dao.upsert(post.copy(status = PostStatus.PUBLISHING))
+        runCatching {
+            val backendId = post.backendId ?: error("Not synced to backend yet")
+            api().publishNow(backendId)
+            dao.upsert(post.copy(status = PostStatus.PUBLISHED))
+        }.onFailure { e ->
+            dao.upsert(post.copy(status = PostStatus.FAILED, failureReason = e.message))
+            throw e
+        }
+    }
+
+    suspend fun deletePost(id: String) = dao.delete(id)
+
+    suspend fun setQueuePaused(paused: Boolean): Boolean {
+        return runCatching {
+            if (paused) api().pauseQueue() else api().resumeQueue()
+            paused
+        }.getOrElse { throw it }
+    }
+
+    suspend fun queuePaused(): Boolean =
+        runCatching { api().queueState().paused }.getOrDefault(false)
+
+    suspend fun refreshInsights(pageId: String? = null): InsightsDto? {
+        return runCatching { api().insights(pageId) }.getOrNull()
+    }
+
+    companion object {
+        fun iso(millis: Long): String {
+            val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+            fmt.timeZone = TimeZone.getTimeZone("UTC")
+            return fmt.format(Date(millis))
+        }
+    }
+}
+
+private fun com.postscheduler.data.remote.PostDto.toLocal(): Post {
+    val type = runCatching { PostType.valueOf(type.uppercase()) }.getOrDefault(PostType.POST)
+    val status = runCatching { PostStatus.valueOf(status.uppercase()) }.getOrDefault(PostStatus.SCHEDULED)
+    val millis = scheduledAt?.let { parseIso(it) }
+    return Post(
+        id = id, type = type, caption = caption, hashtags = hashtags ?: "",
+        scheduledAtMillis = millis, status = status,
+        failureReason = failureReason, backendId = id, publishedPostId = facebookPostId
+    )
+}
+
+/** Parse a backend ISO-8601 timestamp. The backend returns UTC `Z` times,
+ * but the web writes them with milliseconds (`...T15:40:00.000Z`) while the
+ * app writes them without (`...T16:13:00Z`) — both shapes must parse, or
+ * the post's time comes back null and it vanishes from the Publish tab. */
+private fun parseIso(iso: String): Long? {
+    runCatching { return java.time.Instant.parse(iso).toEpochMilli() }
+    return runCatching {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.parse(iso)?.time
+    }.getOrNull()
+}

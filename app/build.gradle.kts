@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.facebookpostplanner"
+    namespace = "com.postscheduler"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.facebookpostplanner"
+        applicationId = "com.postscheduler"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

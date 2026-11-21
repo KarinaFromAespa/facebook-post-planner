@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "facebook-post-planner"
+rootProject.name = "post-scheduler"
 include(":app")

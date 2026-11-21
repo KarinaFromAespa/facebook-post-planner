@@ -1,4 +1,4 @@
-# Facebook Post Planner
+# Post Scheduler
 
 Buffer-style queue-and-publish app for Facebook Pages. Private repo
 (made public 2026-11-20 so GitHub Actions can build it).
