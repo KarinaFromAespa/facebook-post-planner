@@ -47,7 +47,8 @@ data class UpdatePostRequest(
 
 data class PageDto(
     val id: String,
-    val name: String
+    val name: String,
+    val pictureUrl: String? = null
 )
 
 /** Sent after Facebook Login: the Page the user picked plus its Page token,
@@ -57,7 +58,8 @@ data class PageDto(
 data class ConnectPageRequest(
     val pageId: String,
     val pageName: String,
-    val accessToken: String
+    val accessToken: String,
+    val pictureUrl: String? = null
 )
 
 data class QueueStateDto(val paused: Boolean)

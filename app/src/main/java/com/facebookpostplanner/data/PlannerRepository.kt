@@ -60,9 +60,9 @@ class PlannerRepository(context: Context) {
      * backend accepted the token (its POST /api/pages/connect may not exist
      * yet — then posts save locally and the token stays on the phone).
      */
-    suspend fun connectPage(id: String, name: String, accessToken: String): Boolean {
+    suspend fun connectPage(id: String, name: String, accessToken: String, pictureUrl: String? = null): Boolean {
         val stored = runCatching {
-            api().connectPage(com.facebookpostplanner.data.remote.ConnectPageRequest(id, name, accessToken))
+            api().connectPage(com.facebookpostplanner.data.remote.ConnectPageRequest(id, name, accessToken, pictureUrl))
         }.isSuccess
         setPage(id, name)
         return stored

@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /** A Page the signed-in Facebook account manages, as returned by /me/accounts. */
-data class FacebookPage(val id: String, val name: String, val accessToken: String)
+data class FacebookPage(val id: String, val name: String, val accessToken: String, val pictureUrl: String? = null)
 
 class PageViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = PlannerRepository(app)
@@ -125,7 +125,9 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
                     val obj: JSONObject = data.getJSONObject(i)
                     val token = obj.optString("access_token")
                     if (token.isNotBlank()) {
-                        found += FacebookPage(obj.getString("id"), obj.getString("name"), token)
+                        val pictureUrl = obj.optJSONObject("picture")
+                            ?.optJSONObject("data")?.optString("url")?.takeIf { it.isNotBlank() }
+                        found += FacebookPage(obj.getString("id"), obj.getString("name"), token, pictureUrl)
                     }
                 }
             }
@@ -136,12 +138,12 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
                 "Signed in — pick a Page below."
             }
         }
-        request.parameters = Bundle().apply { putString("fields", "id,name,access_token") }
+        request.parameters = Bundle().apply { putString("fields", "id,name,access_token,picture.type(large)") }
         request.executeAsync()
     }
 
     fun selectFacebookPage(page: FacebookPage) = viewModelScope.launch {
-        val stored = repo.connectPage(page.id, page.name, page.accessToken)
+        val stored = repo.connectPage(page.id, page.name, page.accessToken, page.pictureUrl)
         _fbStatus.value = if (stored) {
             "Connected ${page.name} — its token is saved on the backend."
         } else {

@@ -37,10 +37,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.facebook.CallbackManager
 
@@ -68,6 +75,7 @@ fun PageScreen(
     var url by remember(backendUrl) { mutableStateOf(backendUrl) }
     val activity = LocalContext.current as Activity
     val hasConnectedPage = selectedId != null || pages.isNotEmpty()
+    val selectedPictureUrl = pages.firstOrNull { it.id == selectedId }?.pictureUrl
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
@@ -87,19 +95,11 @@ fun PageScreen(
                 Modifier.fillMaxWidth().padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    Modifier.size(40.dp).background(
-                        MaterialTheme.colorScheme.primary, CircleShape
-                    ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        (selectedName?.firstOrNull() ?: '?').toString(),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
+                PageAvatar(
+                    pictureUrl = selectedPictureUrl,
+                    name = selectedName ?: selectedId ?: "?",
+                    size = 40.dp
+                )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Posting to", style = MaterialTheme.typography.labelMedium)
@@ -151,7 +151,8 @@ fun PageScreen(
                     name = page.name,
                     id = page.id,
                     selected = page.id == selectedId,
-                    onClick = { vm.selectFacebookPage(page) }
+                    onClick = { vm.selectFacebookPage(page) },
+                    pictureUrl = page.pictureUrl
                 )
             }
         }
@@ -174,6 +175,7 @@ fun PageScreen(
                     id = page.id,
                     selected = page.id == selectedId,
                     onClick = { vm.selectPage(page) },
+                    pictureUrl = page.pictureUrl,
                     onRemove = { vm.removeBackendPage(page.id) }
                 )
             }
@@ -197,11 +199,53 @@ fun PageScreen(
 }
 
 @Composable
+/**
+ * A Page's profile picture, cached in memory only until the app closes.
+ * The picture URL comes from /me/accounts (no extra API call) and the image
+ * itself is a CDN download, not a Graph API call, so it costs no rate
+ * limit. Coil's disk cache is disabled here so the image lives only in
+ * memory; without a picture URL it falls back to the initial letter.
+ */
+@Composable
+private fun PageAvatar(
+    pictureUrl: String?,
+    name: String,
+    size: Dp,
+    containerColor: Color = MaterialTheme.colorScheme.primary,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimary
+) {
+    if (pictureUrl != null) {
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(pictureUrl)
+                .diskCachePolicy(CachePolicy.DISABLED)
+                .crossfade(true)
+                .build(),
+            contentDescription = "$name profile picture",
+            modifier = Modifier.size(size).clip(CircleShape),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(
+            Modifier.size(size).background(containerColor, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                (name.firstOrNull() ?: '?').toString(),
+                color = contentColor,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+    }
+}
+
 private fun PageRow(
     name: String,
     id: String,
     selected: Boolean,
     onClick: () -> Unit,
+    pictureUrl: String? = null,
     onRemove: (() -> Unit)? = null
 ) {
     Row(
@@ -212,18 +256,13 @@ private fun PageRow(
     ) {
         RadioButton(selected = selected, onClick = onClick)
         Spacer(Modifier.width(4.dp))
-        Box(
-            Modifier.size(36.dp).background(
-                MaterialTheme.colorScheme.primaryContainer, CircleShape
-            ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                name.firstOrNull()?.toString() ?: "?",
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        PageAvatar(
+            pictureUrl = pictureUrl,
+            name = name,
+            size = 36.dp,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(name, fontWeight = FontWeight.Medium)
