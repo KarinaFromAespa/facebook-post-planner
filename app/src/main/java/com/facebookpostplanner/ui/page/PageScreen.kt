@@ -17,9 +17,13 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -171,7 +175,8 @@ fun PageScreen(
                     name = page.name,
                     id = page.id,
                     selected = page.id == selectedId,
-                    onClick = { vm.selectPage(page) }
+                    onClick = { vm.selectPage(page) },
+                    onRemove = { vm.removeBackendPage(page.id) }
                 )
             }
         }
@@ -219,7 +224,8 @@ private fun PageRow(
     name: String,
     id: String,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onRemove: (() -> Unit)? = null
 ) {
     Row(
         Modifier.fillMaxWidth().selectable(
@@ -242,12 +248,24 @@ private fun PageRow(
             )
         }
         Spacer(Modifier.width(12.dp))
-        Column {
+        Column(Modifier.weight(1f)) {
             Text(name, fontWeight = FontWeight.Medium)
             Text(
                 "ID: $id", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+        // Remove this Page from the backend. Without it, a backend Page
+        // can only be removed by selecting it first and using Disconnect
+        // — and after clearing the app's data there is no selected Page
+        // at all, so the backend Pages just keep coming back.
+        if (onRemove != null) {
+            IconButton(onClick = onRemove) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Remove $name from the backend"
+                )
+            }
         }
     }
 }

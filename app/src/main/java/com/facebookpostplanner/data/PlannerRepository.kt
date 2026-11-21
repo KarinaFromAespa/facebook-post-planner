@@ -78,6 +78,13 @@ class PlannerRepository(context: Context) {
         return removed
     }
 
+    /** Remove one Page from the backend only, without touching the local
+     * selection. Used to delete a Page listed under "Pages on the backend"
+     * that is not the currently selected one — clearing the local Page
+     * there would wrongly deselect the Page the user is posting to. */
+    suspend fun removePage(id: String): Boolean =
+        runCatching { api().deletePage(id) }.isSuccess
+
     suspend fun setBackendUrl(url: String) = settings.setBackendUrl(url)
     fun backendUrl(): Flow<String> = settings.backendUrl
 

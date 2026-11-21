@@ -179,6 +179,24 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
         refresh()
     }
 
+    /** Remove one Page from the backend, from the "Pages on the backend"
+     * list. The Disconnect button only removes the currently selected
+     * Page, so without this there is no way to delete a backend Page
+     * that is not selected — it keeps coming back every time the app
+     * opens, even after clearing the app's data, because the list is
+     * fetched from the backend. Only clears the local selection (and the
+     * Facebook session) when the removed Page was the selected one. */
+    fun removeBackendPage(id: String) = viewModelScope.launch {
+        val removed = repo.removePage(id)
+        if (!removed) {
+            _error.value = "Could not remove the Page from the backend — check the backend URL below."
+        } else if (selectedPageId.value == id) {
+            repo.setPage(null, null)
+            LoginManager.getInstance().logOut()
+        }
+        refresh()
+    }
+
     fun saveBackendUrl(url: String) = viewModelScope.launch {
         if (url.isBlank()) return@launch
         repo.setBackendUrl(url)
