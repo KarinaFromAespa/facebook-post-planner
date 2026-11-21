@@ -170,7 +170,7 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
         refresh()
     }
 
-    /** Remove one Page from the backend, from the "Pages on the backend"
+    /** Remove one Page from the backend, from the "Connected Pages"
      * list. The Disconnect button only removes the currently selected
      * Page, so without this there is no way to delete a backend Page
      * that is not selected — it keeps coming back every time the app

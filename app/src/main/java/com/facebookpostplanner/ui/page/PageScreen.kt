@@ -48,8 +48,7 @@ import com.facebook.CallbackManager
  * Connect a Facebook Page — the standard PostPlanner/Buffer way: sign in
  * with Facebook, grant the Page permissions, and pick one of the Pages the
  * account manages. The Page's token goes to the backend so the server can
- * publish as that Page. Adding a Page by ID below is only a fallback for
- * when Facebook Login is not set up yet (no Facebook App ID).
+ * publish as that Page.
  */
 @Composable
 fun PageScreen(
@@ -68,6 +67,7 @@ fun PageScreen(
 
     var url by remember(backendUrl) { mutableStateOf(backendUrl) }
     val activity = LocalContext.current as Activity
+    val hasConnectedPage = selectedId != null || pages.isNotEmpty()
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
@@ -125,7 +125,7 @@ fun PageScreen(
         }
         Spacer(Modifier.height(20.dp))
 
-        Text("Connect with Facebook", style = MaterialTheme.typography.titleMedium)
+        Text(if (hasConnectedPage) "Connect more pages" else "Connect with Facebook", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(6.dp))
         Text(
             "Sign in with the Facebook account that manages the Page. The app lists your Pages — pick one and its token goes to the backend.",
@@ -139,7 +139,7 @@ fun PageScreen(
             },
             enabled = callbackManager != null && !fbLoggingIn,
             modifier = Modifier.fillMaxWidth()
-        ) { Text(if (fbLoggingIn) "Signing in…" else "Connect with Facebook") }
+        ) { Text(if (fbLoggingIn) "Signing in…" else if (hasConnectedPage) "Connect more pages" else "Connect with Facebook") }
         fbStatus?.let {
             Spacer(Modifier.height(8.dp))
             Text(it, style = MaterialTheme.typography.bodySmall)
@@ -157,13 +157,13 @@ fun PageScreen(
         }
         Spacer(Modifier.height(20.dp))
 
-        Text("Pages on the backend", style = MaterialTheme.typography.titleMedium)
+        Text("Connected Pages", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(6.dp))
         if (loading) {
             Text("Loading…")
         } else if (pages.isEmpty()) {
             Text(
-                "No Pages returned by the backend. Either the backend has no Page token configured yet, or it is unreachable — check the backend URL below, or add the Page by ID.",
+                "No Pages returned by the backend. Either the backend has no Page token configured yet, or it is unreachable — check the backend URL below.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
