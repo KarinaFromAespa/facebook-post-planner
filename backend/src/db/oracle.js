@@ -23,6 +23,18 @@ async function getPool() {
   return pool;
 }
 
+// Run fn with a Connection checked out of the pool, then release it. A Pool
+// itself has no .execute() — only a Connection does.
+async function withConnection(fn) {
+  const p = await getPool();
+  const conn = await p.getConnection();
+  try {
+    return await fn(conn);
+  } finally {
+    await conn.close();
+  }
+}
+
 function toIso(v) {
   if (!v) return null;
   return v instanceof Date ? v.toISOString() : new Date(v).toISOString();
@@ -61,9 +73,8 @@ function postBinds(p) {
 }
 
 async function upsertPost(post) {
-  const p = await getPool();
   const b = postBinds(post);
-  await p.execute(
+  await withConnection((conn) => conn.execute(
     `MERGE INTO posts dst USING (SELECT :id AS id FROM dual) src ON (dst.id = src.id)
      WHEN MATCHED THEN UPDATE SET type=:type, caption=:caption, hashtags=:hashtags,
        scheduled_at=:scheduled_at, status=:status, failure_reason=:failure_reason,
@@ -74,17 +85,17 @@ async function upsertPost(post) {
        VALUES (:id, :type, :caption, :hashtags, :scheduled_at, :status,
        :failure_reason, :facebook_post_id, :page_id, :media_files, :created_at, :updated_at)`,
     b, { autoCommit: true },
-  );
+  ));
 }
 
 async function deletePost(id) {
-  const p = await getPool();
-  await p.execute('DELETE FROM posts WHERE id = :id', { id }, { autoCommit: true });
+  await withConnection((conn) => conn.execute(
+    'DELETE FROM posts WHERE id = :id', { id }, { autoCommit: true },
+  ));
 }
 
 async function upsertPage(page) {
-  const p = await getPool();
-  await p.execute(
+  await withConnection((conn) => conn.execute(
     `MERGE INTO pages dst USING (SELECT :id AS id FROM dual) src ON (dst.id = src.id)
      WHEN MATCHED THEN UPDATE SET name=:name, access_token=:access_token,
        picture_url=:picture_url, long_lived=:long_lived, connected_at=:connected_at
@@ -96,45 +107,46 @@ async function upsertPage(page) {
       connected_at: page.connectedAt ? new Date(page.connectedAt) : null,
     },
     { autoCommit: true },
-  );
+  ));
 }
 
 async function deletePage(id) {
-  const p = await getPool();
-  await p.execute('DELETE FROM pages WHERE id = :id', { id }, { autoCommit: true });
+  await withConnection((conn) => conn.execute(
+    'DELETE FROM pages WHERE id = :id', { id }, { autoCommit: true },
+  ));
 }
 
 async function setSetting(key, value) {
-  const p = await getPool();
-  await p.execute(
+  await withConnection((conn) => conn.execute(
     `MERGE INTO settings dst USING (SELECT :key AS key FROM dual) src ON (dst.key = src.key)
      WHEN MATCHED THEN UPDATE SET value=:value
      WHEN NOT MATCHED THEN INSERT (key, value) VALUES (:key, :value)`,
     { key, value }, { autoCommit: true },
-  );
+  ));
 }
 
 // Whole-state read, used on startup when the local JSON file is empty
 // (fresh VM / restore) so the queue can be rebuilt from the primary DB.
 async function getAll() {
-  const p = await getPool();
-  const posts = await p.execute(
-    'SELECT id, type, caption, hashtags, scheduled_at, status, failure_reason, facebook_post_id, page_id, media_files, created_at, updated_at FROM posts',
-    [], { outFormat: oracledb.OUT_FORMAT_OBJECT },
-  );
-  const pages = await p.execute(
-    'SELECT id, name, access_token, picture_url, long_lived, connected_at FROM pages',
-    [], { outFormat: oracledb.OUT_FORMAT_OBJECT },
-  );
-  const settings = await p.execute(
-    'SELECT key, value FROM settings', [], { outFormat: oracledb.OUT_FORMAT_OBJECT },
-  );
-  const queuePaused = (settings.rows.find((r) => r.KEY === 'queuePaused') || {}).VALUE === 'true';
-  return {
-    posts: posts.rows.map(rowToPost),
-    pages: pages.rows.map(rowToPage),
-    queuePaused,
-  };
+  return withConnection(async (conn) => {
+    const posts = await conn.execute(
+      'SELECT id, type, caption, hashtags, scheduled_at, status, failure_reason, facebook_post_id, page_id, media_files, created_at, updated_at FROM posts',
+      [], { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const pages = await conn.execute(
+      'SELECT id, name, access_token, picture_url, long_lived, connected_at FROM pages',
+      [], { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const settings = await conn.execute(
+      'SELECT key, value FROM settings', [], { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const queuePaused = (settings.rows.find((r) => r.KEY === 'queuePaused') || {}).VALUE === 'true';
+    return {
+      posts: posts.rows.map(rowToPost),
+      pages: pages.rows.map(rowToPage),
+      queuePaused,
+    };
+  });
 }
 
 module.exports = { configured, upsertPost, deletePost, upsertPage, deletePage, setSetting, getAll };
