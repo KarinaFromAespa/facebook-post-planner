@@ -37,19 +37,18 @@ import com.facebook.CallbackManager
 import com.facebookpostplanner.data.local.Post
 import com.facebookpostplanner.ui.create.CreateScreen
 import com.facebookpostplanner.ui.drafts.DraftsScreen
-import com.facebookpostplanner.ui.insights.InsightsScreen
 import com.facebookpostplanner.ui.page.PageScreen
 import com.facebookpostplanner.ui.publish.PublishScreen
 import com.facebookpostplanner.ui.theme.PlannerTheme
 
 /**
- * Bottom nav: Create / Publish / Insights only. No Community tab.
+ * Bottom nav: Create / Publish / Drafts only. No Community tab.
  * Publish is home. FAB goes to Create.
  *
  * The selected tab is read from the NavController's back stack, not from a
  * separate remembered variable — that is the single source of truth for
  * which screen is showing, so the highlighted tab can never disagree with
- * the content (e.g. Insights showing Create's screen).
+ * the content (e.g. Drafts showing Create's screen).
  */
 class MainActivity : ComponentActivity() {
     // Facebook Login hands its result back through this manager.
@@ -70,8 +69,7 @@ class MainActivity : ComponentActivity() {
 private enum class Tab(val route: String, val label: String) {
     CREATE("create", "Create"),
     PUBLISH("publish", "Publish"),
-    DRAFTS("drafts", "Drafts"),
-    INSIGHTS("insights", "Insights")
+    DRAFTS("drafts", "Drafts")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,7 +108,7 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
-                listOf(Tab.CREATE, Tab.PUBLISH, Tab.DRAFTS, Tab.INSIGHTS).forEach { tab ->
+                listOf(Tab.CREATE, Tab.PUBLISH, Tab.DRAFTS).forEach { tab ->
                     NavigationBarItem(
                         selected = currentTab == tab,
                         onClick = {
@@ -134,7 +132,6 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
                                 Tab.CREATE -> Icon(Icons.Default.Add, null)
                                 Tab.PUBLISH -> Icon(Icons.Default.CalendarMonth, null)
                                 Tab.DRAFTS -> Icon(Icons.Default.EditNote, null)
-                                Tab.INSIGHTS -> Icon(Icons.Default.BarChart, null)
                             }
                         },
                         label = { Text(tab.label) }
@@ -192,7 +189,6 @@ private fun PlannerNav(fbCallbackManager: CallbackManager) {
                     editPost = postToEdit
                 )
             }
-            composable(Tab.INSIGHTS.route) { InsightsScreen() }
             composable(Tab.DRAFTS.route) {
                 DraftsScreen(
                     onCreate = {
