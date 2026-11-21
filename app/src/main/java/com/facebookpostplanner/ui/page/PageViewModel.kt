@@ -154,15 +154,6 @@ class PageViewModel(app: Application) : AndroidViewModel(app) {
         repo.setPage(page.id, page.name)
     }
 
-    fun addPageManually(id: String, name: String) = viewModelScope.launch {
-        if (id.isBlank()) {
-            _error.value = "Enter the Page ID from Facebook."
-            return@launch
-        }
-        repo.setPage(id.trim(), name.ifBlank { id.trim() })
-        _error.value = null
-    }
-
     fun disconnect() = viewModelScope.launch {
         val id = selectedPageId.value
         if (id != null) {

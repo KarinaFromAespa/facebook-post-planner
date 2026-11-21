@@ -66,8 +66,6 @@ fun PageScreen(
     val fbStatus by vm.fbStatus.collectAsState()
     val fbLoggingIn by vm.fbLoggingIn.collectAsState()
 
-    var manualId by remember { mutableStateOf("") }
-    var manualName by remember { mutableStateOf("") }
     var url by remember(backendUrl) { mutableStateOf(backendUrl) }
     val activity = LocalContext.current as Activity
 
@@ -182,27 +180,6 @@ fun PageScreen(
         }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = { vm.refresh() }) { Text("Refresh pages") }
-        Spacer(Modifier.height(20.dp))
-
-        Text("Add a Page by ID", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = manualId, onValueChange = { manualId = it },
-            label = { Text("Page ID") }, modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = manualName, onValueChange = { manualName = it },
-            label = { Text("Page name (optional)") }, modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        )
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = {
-            vm.addPageManually(manualId, manualName)
-            manualId = ""
-            manualName = ""
-        }) { Text("Connect this Page") }
         Spacer(Modifier.height(20.dp))
 
         Text("Backend", style = MaterialTheme.typography.titleMedium)
